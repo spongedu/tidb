@@ -15,8 +15,10 @@ package executor
 
 import (
 	"math"
+	"sort"
 	"time"
 
+	"github.com/cznic/sortutil"
 	"github.com/juju/errors"
 	"github.com/pingcap/tidb/ast"
 	"github.com/pingcap/tidb/context"
@@ -41,6 +43,7 @@ type executorBuilder struct {
 	ctx      context.Context
 	is       infoschema.InfoSchema
 	priority int
+	startTS  uint64 // cached when the first time getStartTS() is called
 	// err is set when there is error happened during Executor building process.
 	err error
 }
@@ -469,32 +472,76 @@ func (b *executorBuilder) buildUnionScanExec(v *plan.PhysicalUnionScan) Executor
 	return us
 }
 
-// buildMergeJoin builds SortMergeJoin executor.
-// TODO: Refactor against different join strategies by extracting common code base
+// buildMergeJoin builds MergeJoinExec executor.
 func (b *executorBuilder) buildMergeJoin(v *plan.PhysicalMergeJoin) Executor {
-	joinBuilder := &joinBuilder{
-		context:       b.ctx,
-		leftChild:     b.build(v.Children()[0]),
-		rightChild:    b.build(v.Children()[1]),
-		eqConditions:  v.EqualConditions,
-		leftFilter:    v.LeftConditions,
-		rightFilter:   v.RightConditions,
-		otherFilter:   v.OtherConditions,
-		schema:        v.Schema(),
-		joinType:      v.JoinType,
-		defaultValues: v.DefaultValues,
-	}
-	exec, err := joinBuilder.BuildMergeJoin()
-	if err != nil {
-		b.err = err
-		return nil
-	}
-	if exec == nil {
-		b.err = ErrBuildExecutor.GenByArgs("failed to generate merge join executor: ", v.ID())
+	leftExec := b.build(v.Children()[0])
+	if b.err != nil {
+		b.err = errors.Trace(b.err)
 		return nil
 	}
 
-	return exec
+	rightExec := b.build(v.Children()[1])
+	if b.err != nil {
+		b.err = errors.Trace(b.err)
+		return nil
+	}
+
+	leftKeys := make([]*expression.Column, 0, len(v.EqualConditions))
+	rightKeys := make([]*expression.Column, 0, len(v.EqualConditions))
+	for _, eqCond := range v.EqualConditions {
+		if len(eqCond.GetArgs()) != 2 {
+			b.err = errors.Annotate(ErrBuildExecutor, "invalid join key for equal condition")
+			return nil
+		}
+		leftKey, ok := eqCond.GetArgs()[0].(*expression.Column)
+		if !ok {
+			b.err = errors.Annotate(ErrBuildExecutor, "left side of join key must be column for merge join")
+			return nil
+		}
+		rightKey, ok := eqCond.GetArgs()[1].(*expression.Column)
+		if !ok {
+			b.err = errors.Annotate(ErrBuildExecutor, "right side of join key must be column for merge join")
+			return nil
+		}
+		leftKeys = append(leftKeys, leftKey)
+		rightKeys = append(rightKeys, rightKey)
+	}
+
+	leftRowBlock := &rowBlockIterator{
+		ctx:      b.ctx,
+		reader:   leftExec,
+		filter:   v.LeftConditions,
+		joinKeys: leftKeys,
+	}
+
+	rightRowBlock := &rowBlockIterator{
+		ctx:      b.ctx,
+		reader:   rightExec,
+		filter:   v.RightConditions,
+		joinKeys: rightKeys,
+	}
+
+	mergeJoinExec := &MergeJoinExec{
+		baseExecutor:    newBaseExecutor(v.Schema(), b.ctx, leftExec, rightExec),
+		resultGenerator: newJoinResultGenerator(b.ctx, v.JoinType, false, v.DefaultValues, v.OtherConditions),
+		stmtCtx:         b.ctx.GetSessionVars().StmtCtx,
+		// left is the outer side by default.
+		outerKeys: leftKeys,
+		innerKeys: rightKeys,
+		outerIter: leftRowBlock,
+		innerIter: rightRowBlock,
+	}
+	if v.JoinType == plan.RightOuterJoin {
+		mergeJoinExec.outerKeys, mergeJoinExec.innerKeys = mergeJoinExec.innerKeys, mergeJoinExec.outerKeys
+		mergeJoinExec.outerIter, mergeJoinExec.innerIter = mergeJoinExec.innerIter, mergeJoinExec.outerIter
+	}
+
+	if v.JoinType != plan.InnerJoin {
+		mergeJoinExec.outerFilter = mergeJoinExec.outerIter.filter
+		mergeJoinExec.outerIter.filter = nil
+	}
+
+	return mergeJoinExec
 }
 
 func (b *executorBuilder) buildHashJoin(v *plan.PhysicalHashJoin) Executor {
@@ -505,49 +552,34 @@ func (b *executorBuilder) buildHashJoin(v *plan.PhysicalHashJoin) Executor {
 		leftHashKey = append(leftHashKey, ln)
 		rightHashKey = append(rightHashKey, rn)
 	}
+
+	leftExec := b.build(v.Children()[0])
+	rightExec := b.build(v.Children()[1])
+
+	// for hash join, inner table is always the smaller one.
 	e := &HashJoinExec{
-		schema:        v.Schema(),
-		otherFilter:   v.OtherConditions,
-		prepared:      false,
-		ctx:           b.ctx,
-		concurrency:   v.Concurrency,
-		defaultValues: v.DefaultValues,
+		baseExecutor:    newBaseExecutor(v.Schema(), b.ctx, leftExec, rightExec),
+		resultGenerator: newJoinResultGenerator(b.ctx, v.JoinType, v.SmallChildIdx == 0, v.DefaultValues, v.OtherConditions),
+		concurrency:     v.Concurrency,
+		defaultInners:   v.DefaultValues,
 	}
-	if v.SmallTable == 1 {
-		e.smallFilter = v.RightConditions
-		e.bigFilter = v.LeftConditions
-		e.smallHashKey = rightHashKey
-		e.bigHashKey = leftHashKey
-		e.leftSmall = false
+
+	if v.SmallChildIdx == 0 {
+		e.innerlExec = leftExec
+		e.outerExec = rightExec
+		e.innerFilter = v.LeftConditions
+		e.outerFilter = v.RightConditions
+		e.innerKeys = leftHashKey
+		e.outerKeys = rightHashKey
 	} else {
-		e.leftSmall = true
-		e.smallFilter = v.LeftConditions
-		e.bigFilter = v.RightConditions
-		e.smallHashKey = leftHashKey
-		e.bigHashKey = rightHashKey
+		e.innerlExec = rightExec
+		e.outerExec = leftExec
+		e.innerFilter = v.RightConditions
+		e.outerFilter = v.LeftConditions
+		e.innerKeys = rightHashKey
+		e.outerKeys = leftHashKey
 	}
-	if v.JoinType == plan.LeftOuterJoin || v.JoinType == plan.RightOuterJoin {
-		e.outer = true
-	}
-	if e.leftSmall {
-		e.smallExec = b.build(v.Children()[0])
-		e.bigExec = b.build(v.Children()[1])
-	} else {
-		e.smallExec = b.build(v.Children()[1])
-		e.bigExec = b.build(v.Children()[0])
-	}
-	for i := 0; i < e.concurrency; i++ {
-		ctx := &hashJoinCtx{}
-		if e.bigFilter != nil {
-			ctx.bigFilter = e.bigFilter.Clone()
-		}
-		if e.otherFilter != nil {
-			ctx.otherFilter = e.otherFilter.Clone()
-		}
-		ctx.datumBuffer = make([]types.Datum, len(e.bigHashKey))
-		ctx.hashKeyBuffer = make([]byte, 0, 10000)
-		e.hashJoinContexts = append(e.hashJoinContexts, ctx)
-	}
+
 	return e
 }
 
@@ -618,10 +650,16 @@ func (b *executorBuilder) buildTableDual(v *plan.TableDual) Executor {
 }
 
 func (b *executorBuilder) getStartTS() uint64 {
+	if b.startTS != 0 {
+		// Return the cached value.
+		return b.startTS
+	}
+
 	startTS := b.ctx.GetSessionVars().SnapshotTS
 	if startTS == 0 {
 		startTS = b.ctx.Txn().StartTS()
 	}
+	b.startTS = startTS
 	return startTS
 }
 
@@ -671,7 +709,7 @@ func (b *executorBuilder) buildNestedLoopJoin(v *plan.PhysicalHashJoin) *NestedL
 		cond.GetArgs()[0].(*expression.Column).ResolveIndices(v.Schema())
 		cond.GetArgs()[1].(*expression.Column).ResolveIndices(v.Schema())
 	}
-	if v.SmallTable == 1 {
+	if v.SmallChildIdx == 1 {
 		return &NestedLoopJoinExec{
 			SmallExec:     b.build(v.Children()[1]),
 			BigExec:       b.build(v.Children()[0]),
@@ -790,6 +828,12 @@ func (b *executorBuilder) buildAnalyzeIndexPushdown(task plan.AnalyzeIndexTask) 
 		BucketSize: maxBucketSize,
 		NumColumns: int32(len(task.IndexInfo.Columns)),
 	}
+	if !task.IndexInfo.Unique {
+		depth := int32(defaultCMSketchDepth)
+		width := int32(defaultCMSketchWidth)
+		e.analyzePB.IdxReq.CmsketchDepth = &depth
+		e.analyzePB.IdxReq.CmsketchWidth = &width
+	}
 	return e
 }
 
@@ -815,11 +859,15 @@ func (b *executorBuilder) buildAnalyzeColumnsPushdown(task plan.AnalyzeColumnsTa
 			TimeZoneOffset: timeZoneOffset(b.ctx),
 		},
 	}
+	depth := int32(defaultCMSketchDepth)
+	width := int32(defaultCMSketchWidth)
 	e.analyzePB.ColReq = &tipb.AnalyzeColumnsReq{
-		BucketSize:  maxBucketSize,
-		SampleSize:  maxRegionSampleSize,
-		SketchSize:  maxSketchSize,
-		ColumnsInfo: distsql.ColumnsToProto(cols, task.TableInfo.PKIsHandle),
+		BucketSize:    maxBucketSize,
+		SampleSize:    maxRegionSampleSize,
+		SketchSize:    maxSketchSize,
+		ColumnsInfo:   distsql.ColumnsToProto(cols, task.TableInfo.PKIsHandle),
+		CmsketchDepth: &depth,
+		CmsketchWidth: &width,
 	}
 	b.err = setPBColumnsDefaultValue(b.ctx, e.analyzePB.ColReq.ColumnsInfo, cols)
 	return e
@@ -907,24 +955,27 @@ func (b *executorBuilder) buildIndexLookUpJoin(v *plan.PhysicalIndexJoin) Execut
 
 	// for IndexLookUpJoin, left is always the outer side.
 	outerExec := b.build(v.Children()[0])
-	innerExec := b.build(v.Children()[1]).(DataReader)
-
+	if b.err != nil {
+		b.err = errors.Trace(b.err)
+		return nil
+	}
+	innerExecBuilder := &dataReaderBuilder{v.Children()[1], b}
 	return &IndexLookUpJoin{
 		baseExecutor:     newBaseExecutor(v.Schema(), b.ctx, outerExec),
 		outerExec:        outerExec,
-		innerExec:        innerExec,
+		innerExecBuilder: innerExecBuilder,
 		outerKeys:        v.OuterJoinKeys,
 		innerKeys:        v.InnerJoinKeys,
 		outerFilter:      v.LeftConditions,
 		innerFilter:      v.RightConditions,
 		outerOrderedRows: newKeyRowBlock(batchSize, true),
 		innerOrderedRows: newKeyRowBlock(batchSize, false),
-		resultGenerator:  newJoinResultGenerator(b.ctx, v.JoinType, v.DefaultValues, v.OtherConditions),
-		batchSize:        batchSize,
+		resultGenerator:  newJoinResultGenerator(b.ctx, v.JoinType, false, v.DefaultValues, v.OtherConditions),
+		maxBatchSize:     batchSize,
 	}
 }
 
-func (b *executorBuilder) buildTableReader(v *plan.PhysicalTableReader) Executor {
+func (b *executorBuilder) buildTableReader(v *plan.PhysicalTableReader) *TableReaderExecutor {
 	dagReq := b.constructDAGReq(v.TablePlans)
 	if b.err != nil {
 		return nil
@@ -955,7 +1006,7 @@ func (b *executorBuilder) buildTableReader(v *plan.PhysicalTableReader) Executor
 	return e
 }
 
-func (b *executorBuilder) buildIndexReader(v *plan.PhysicalIndexReader) Executor {
+func (b *executorBuilder) buildIndexReader(v *plan.PhysicalIndexReader) *IndexReaderExecutor {
 	dagReq := b.constructDAGReq(v.IndexPlans)
 	if b.err != nil {
 		return nil
@@ -987,7 +1038,7 @@ func (b *executorBuilder) buildIndexReader(v *plan.PhysicalIndexReader) Executor
 	return e
 }
 
-func (b *executorBuilder) buildIndexLookUpReader(v *plan.PhysicalIndexLookUpReader) Executor {
+func (b *executorBuilder) buildIndexLookUpReader(v *plan.PhysicalIndexLookUpReader) *IndexLookUpExecutor {
 	indexReq := b.constructDAGReq(v.IndexPlans)
 	if b.err != nil {
 		return nil
@@ -1046,6 +1097,99 @@ func (b *executorBuilder) buildIndexLookUpReader(v *plan.PhysicalIndexLookUpRead
 		handleCol:         handleCol,
 		priority:          b.priority,
 		tableReaderSchema: tableReaderSchema,
+		dataReaderBuilder: &dataReaderBuilder{executorBuilder: b},
 	}
 	return e
+}
+
+// dataReaderBuilder build an executor.
+// The executor can be used to read data in the ranges which are constructed by datums.
+// Differences from executorBuilder:
+// 1. dataReaderBuilder calculate data range from argument, rather than plan.
+// 2. the result executor is already opened.
+type dataReaderBuilder struct {
+	plan.Plan
+	*executorBuilder
+}
+
+func (builder *dataReaderBuilder) buildExecutorForDatums(goCtx goctx.Context, datums [][]types.Datum) (Executor, error) {
+	switch v := builder.Plan.(type) {
+	case *plan.PhysicalIndexReader:
+		return builder.buildIndexReaderForDatums(goCtx, v, datums)
+	case *plan.PhysicalTableReader:
+		return builder.buildTableReaderForDatums(goCtx, v, datums)
+	case *plan.PhysicalIndexLookUpReader:
+		return builder.buildIndexLookUpReaderForDatums(goCtx, v, datums)
+	}
+	return nil, errors.New("Wrong plan type for dataReaderBuilder")
+}
+
+func (builder *dataReaderBuilder) buildTableReaderForDatums(goCtx goctx.Context, v *plan.PhysicalTableReader, datums [][]types.Datum) (Executor, error) {
+	e := builder.executorBuilder.buildTableReader(v)
+	if err := builder.executorBuilder.err; err != nil {
+		return nil, errors.Trace(err)
+	}
+	handles := make([]int64, 0, len(datums))
+	for _, datum := range datums {
+		handles = append(handles, datum[0].GetInt64())
+	}
+	return builder.buildTableReaderFromHandles(goCtx, e, handles)
+}
+
+func (builder *dataReaderBuilder) buildTableReaderFromHandles(goCtx goctx.Context, e *TableReaderExecutor, handles []int64) (Executor, error) {
+	sort.Sort(sortutil.Int64Slice(handles))
+	var b requestBuilder
+	kvReq, err := b.SetTableHandles(e.tableID, handles).
+		SetDAGRequest(e.dagPB).
+		SetDesc(e.desc).
+		SetKeepOrder(e.keepOrder).
+		SetPriority(e.priority).
+		SetFromSessionVars(e.ctx.GetSessionVars()).
+		Build()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	e.result, err = distsql.SelectDAG(goCtx, e.ctx.GetClient(), kvReq, e.schema.Len())
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	e.result.Fetch(goCtx)
+	return e, nil
+}
+
+func (builder *dataReaderBuilder) buildIndexReaderForDatums(goCtx goctx.Context, v *plan.PhysicalIndexReader, values [][]types.Datum) (Executor, error) {
+	e := builder.executorBuilder.buildIndexReader(v)
+	if err := builder.executorBuilder.err; err != nil {
+		return nil, errors.Trace(err)
+	}
+	var b requestBuilder
+	kvReq, err := b.SetIndexValues(e.tableID, e.index.ID, values).
+		SetDAGRequest(e.dagPB).
+		SetDesc(e.desc).
+		SetKeepOrder(e.keepOrder).
+		SetPriority(e.priority).
+		SetFromSessionVars(e.ctx.GetSessionVars()).
+		Build()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	e.result, err = distsql.SelectDAG(e.ctx.GoCtx(), e.ctx.GetClient(), kvReq, e.schema.Len())
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	e.result.Fetch(goCtx)
+	return e, nil
+}
+
+func (builder *dataReaderBuilder) buildIndexLookUpReaderForDatums(goCtx goctx.Context, v *plan.PhysicalIndexLookUpReader, values [][]types.Datum) (Executor, error) {
+	e := builder.executorBuilder.buildIndexLookUpReader(v)
+	if err := builder.executorBuilder.err; err != nil {
+		return nil, errors.Trace(err)
+	}
+	kvRanges, err := indexValuesToKVRanges(e.tableID, e.index.ID, values)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	err = e.open(kvRanges)
+	return e, errors.Trace(err)
 }
