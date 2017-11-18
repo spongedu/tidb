@@ -24,9 +24,9 @@ import (
 	"github.com/juju/errors"
 	"github.com/pingcap/tidb/mysql"
 	"github.com/pingcap/tidb/sessionctx/variable"
+	"github.com/pingcap/tidb/types/json"
 	"github.com/pingcap/tidb/util/charset"
 	"github.com/pingcap/tidb/util/hack"
-	"github.com/pingcap/tidb/util/types/json"
 )
 
 // Kind constants.
@@ -62,6 +62,20 @@ type Datum struct {
 	i         int64       // i can hold int64 uint64 float64 values.
 	b         []byte      // b can hold string or []byte values.
 	x         interface{} // x hold all other types.
+}
+
+// Copy deep copies a Datum.
+func (d *Datum) Copy() *Datum {
+	ret := *d
+	if d.b != nil {
+		ret.b = make([]byte, len(d.b))
+		copy(ret.b, d.b)
+	}
+	// JSON object requires a deep copy, because it includes map/slice fields.
+	if ret.k == KindMysqlJSON {
+		ret.x = *ret.x.(json.JSON).Copy()
+	}
+	return &ret
 }
 
 // Kind gets the kind of the datum.

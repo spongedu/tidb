@@ -22,7 +22,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/pingcap/tidb/mysql"
 	"github.com/pingcap/tidb/sessionctx/variable"
-	"github.com/pingcap/tidb/util/types"
+	"github.com/pingcap/tidb/types"
 )
 
 // GetSessionSystemVar gets a system variable.
@@ -110,6 +110,7 @@ func SetSessionSystemVar(vars *variable.SessionVars, name string, value types.Da
 		}
 		vars.StrictSQLMode = sqlMode.HasStrictMode()
 		vars.SQLMode = sqlMode
+		vars.SetStatusFlag(mysql.ServerStatusNoBackslashEscaped, sqlMode.HasNoBackslashEscapesMode())
 	case variable.TiDBSnapshot:
 		err = setSnapshotTS(vars, sVal)
 		if err != nil {
