@@ -32,6 +32,8 @@ import (
 	"github.com/pingcap/tidb/terror"
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util/admin"
+	"github.com/pingcap/tidb/util/chunk"
+	goctx "golang.org/x/net/context"
 )
 
 var (
@@ -63,6 +65,7 @@ var (
 	ErrBuildExecutor        = terror.ClassExecutor.New(codeErrBuildExec, "Failed to build executor")
 	ErrBatchInsertFail      = terror.ClassExecutor.New(codeBatchInsertFail, "Batch insert failed, please clean the table and try again.")
 	ErrWrongValueCountOnRow = terror.ClassExecutor.New(codeWrongValueCountOnRow, "Column count doesn't match value count at row %d")
+	ErrPasswordFormat       = terror.ClassExecutor.New(codePasswordFormat, "The password hash doesn't have the expected format. Check if the correct password algorithm is being used with the PASSWORD() function.")
 )
 
 // Error codes.
@@ -76,6 +79,7 @@ const (
 	CodePasswordNoMatch      terror.ErrCode = 1133 // MySQL error code
 	CodeCannotUser           terror.ErrCode = 1396 // MySQL error code
 	codeWrongValueCountOnRow terror.ErrCode = 1136 // MySQL error code
+	codePasswordFormat       terror.ErrCode = 1827 // MySQL error code
 )
 
 // Row represents a result set row, it may be returned from a table, a join, or a projection.
@@ -90,18 +94,24 @@ const (
 type Row = types.DatumRow
 
 type baseExecutor struct {
-	children []Executor
-	ctx      context.Context
-	schema   *expression.Schema
+	ctx             context.Context
+	schema          *expression.Schema
+	supportChk      bool
+	children        []Executor
+	childrenResults []*chunk.Chunk
 }
 
 // Open implements the Executor Open interface.
-func (e *baseExecutor) Open() error {
+func (e *baseExecutor) Open(goCtx goctx.Context) error {
 	for _, child := range e.children {
-		err := child.Open()
+		err := child.Open(goCtx)
 		if err != nil {
 			return errors.Trace(err)
 		}
+	}
+	e.childrenResults = make([]*chunk.Chunk, 0, len(e.children))
+	for _, child := range e.children {
+		e.childrenResults = append(e.childrenResults, child.newChunk())
 	}
 	return nil
 }
@@ -114,6 +124,7 @@ func (e *baseExecutor) Close() error {
 			return errors.Trace(err)
 		}
 	}
+	e.childrenResults = nil
 	return nil
 }
 
@@ -123,6 +134,26 @@ func (e *baseExecutor) Schema() *expression.Schema {
 		return expression.NewSchema()
 	}
 	return e.schema
+}
+
+func (e *baseExecutor) newChunk() *chunk.Chunk {
+	return chunk.NewChunk(e.Schema().GetTypes())
+}
+
+func (e *baseExecutor) supportChunk() bool {
+	if !e.supportChk {
+		return false
+	}
+	for _, child := range e.children {
+		if !child.supportChunk() {
+			return false
+		}
+	}
+	return true
+}
+
+func (e *baseExecutor) NextChunk(chk *chunk.Chunk) error {
+	return nil
 }
 
 func newBaseExecutor(schema *expression.Schema, ctx context.Context, children ...Executor) baseExecutor {
@@ -137,8 +168,11 @@ func newBaseExecutor(schema *expression.Schema, ctx context.Context, children ..
 type Executor interface {
 	Next() (Row, error)
 	Close() error
-	Open() error
+	Open(goctx.Context) error
 	Schema() *expression.Schema
+	supportChunk() bool
+	newChunk() *chunk.Chunk
+	NextChunk(chk *chunk.Chunk) error
 }
 
 // CancelDDLJobsExec represents a cancel DDL jobs executor.
@@ -341,9 +375,9 @@ func (e *LimitExec) Next() (Row, error) {
 }
 
 // Open implements the Executor Open interface.
-func (e *LimitExec) Open() error {
+func (e *LimitExec) Open(goCtx goctx.Context) error {
 	e.Idx = 0
-	return errors.Trace(e.children[0].Open())
+	return errors.Trace(e.children[0].Open(goCtx))
 }
 
 func init() {
@@ -360,7 +394,7 @@ func init() {
 		if e.err != nil {
 			return rows, errors.Trace(err)
 		}
-		err = exec.Open()
+		err = exec.Open(goctx.TODO())
 		if err != nil {
 			return rows, errors.Trace(err)
 		}
@@ -379,6 +413,7 @@ func init() {
 		CodeCannotUser:           mysql.ErrCannotUser,
 		CodePasswordNoMatch:      mysql.ErrPasswordNoMatch,
 		codeWrongValueCountOnRow: mysql.ErrWrongValueCountOnRow,
+		codePasswordFormat:       mysql.ErrPasswordFormat,
 	}
 	terror.ErrClassToMySQLCodes[terror.ClassExecutor] = tableMySQLErrCodes
 }
@@ -410,6 +445,16 @@ func (e *ProjectionExec) Next() (retRow Row, err error) {
 	return row, nil
 }
 
+// NextChunk implements the Executor NextChunk interface.
+func (e *ProjectionExec) NextChunk(chk *chunk.Chunk) error {
+	chk.Reset()
+	if err := e.children[0].NextChunk(e.childrenResults[0]); err != nil {
+		return errors.Trace(err)
+	}
+	err := expression.EvalExprsToChunk(e.ctx, e.exprs, e.childrenResults[0], chk)
+	return errors.Trace(err)
+}
+
 // TableDualExec represents a dual table executor.
 type TableDualExec struct {
 	baseExecutor
@@ -419,7 +464,7 @@ type TableDualExec struct {
 }
 
 // Open implements the Executor Open interface.
-func (e *TableDualExec) Open() error {
+func (e *TableDualExec) Open(goCtx goctx.Context) error {
 	e.returnCnt = 0
 	return nil
 }
@@ -466,22 +511,15 @@ type TableScanExec struct {
 
 	t          table.Table
 	asName     *model.CIStr
-	ctx        context.Context
 	ranges     []types.IntColumnRange
 	seekHandle int64
 	iter       kv.Iterator
 	cursor     int
-	schema     *expression.Schema
 	columns    []*model.ColumnInfo
 
 	isVirtualTable     bool
 	virtualTableRows   [][]types.Datum
 	virtualTableCursor int
-}
-
-// Schema implements the Executor Schema interface.
-func (e *TableScanExec) Schema() *expression.Schema {
-	return e.schema
 }
 
 // Next implements the Executor interface.
@@ -583,10 +621,14 @@ func (e *TableScanExec) getRow(handle int64) (Row, error) {
 }
 
 // Open implements the Executor Open interface.
-func (e *TableScanExec) Open() error {
+func (e *TableScanExec) Open(goCtx goctx.Context) error {
 	e.iter = nil
 	e.cursor = 0
 	return nil
+}
+
+func (e *TableScanExec) supportChunk() bool {
+	return false
 }
 
 // ExistsExec represents exists executor.
@@ -597,9 +639,9 @@ type ExistsExec struct {
 }
 
 // Open implements the Executor Open interface.
-func (e *ExistsExec) Open() error {
+func (e *ExistsExec) Open(goCtx goctx.Context) error {
 	e.evaluated = false
-	return errors.Trace(e.children[0].Open())
+	return errors.Trace(e.children[0].Open(goCtx))
 }
 
 // Next implements the Executor Next interface.
@@ -625,9 +667,9 @@ type MaxOneRowExec struct {
 }
 
 // Open implements the Executor Open interface.
-func (e *MaxOneRowExec) Open() error {
+func (e *MaxOneRowExec) Open(goCtx goctx.Context) error {
 	e.evaluated = false
-	return errors.Trace(e.children[0].Open())
+	return errors.Trace(e.children[0].Open(goCtx))
 }
 
 // Next implements the Executor Next interface.
@@ -670,11 +712,6 @@ type UnionExec struct {
 type execResult struct {
 	rows []Row
 	err  error
-}
-
-// Schema implements the Executor Schema interface.
-func (e *UnionExec) Schema() *expression.Schema {
-	return e.schema
 }
 
 func (e *UnionExec) waitAllFinished() {
@@ -727,14 +764,14 @@ func (e *UnionExec) fetchData(idx int) {
 }
 
 // Open implements the Executor Open interface.
-func (e *UnionExec) Open() error {
+func (e *UnionExec) Open(goCtx goctx.Context) error {
 	e.finished.Store(false)
 	e.resultCh = make(chan *execResult, len(e.children))
 	e.closedCh = make(chan struct{})
 	e.cursor = 0
 	var err error
 	for i, child := range e.children {
-		err = child.Open()
+		err = child.Open(goCtx)
 		if err != nil {
 			break
 		}

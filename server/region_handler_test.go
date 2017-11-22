@@ -16,6 +16,7 @@ package server
 import (
 	"bytes"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -195,10 +196,9 @@ func (ts *TidbRegionHandlerTestSuite) startServer(c *C) {
 	c.Assert(err, IsNil)
 	tidbdrv := NewTiDBDriver(store)
 
-	cfg := &config.Config{
-		Port:  4001,
-		Store: "tikv",
-	}
+	cfg := config.NewConfig()
+	cfg.Port = 4001
+	cfg.Store = "tikv"
 	cfg.Status.StatusPort = 10090
 	cfg.Status.ReportStatus = true
 
@@ -269,6 +269,17 @@ func (ts *TidbRegionHandlerTestSuite) TestGetMvcc(c *C) {
 		c.Assert(bytes.Equal(v1, expect.Value), IsTrue)
 		c.Assert(bytes.Equal(v2, expect.Value), IsTrue)
 	}
+
+	_, key, err := codec.DecodeBytes(p1.Key)
+	c.Assert(err, IsNil)
+	hexKey := hex.EncodeToString(key)
+	resp, err = http.Get("http://127.0.0.1:10090/mvcc/hex/" + hexKey)
+	c.Assert(err, IsNil)
+	decoder = json.NewDecoder(resp.Body)
+	var data2 kvrpcpb.MvccGetByKeyResponse
+	err = decoder.Decode(&data2)
+	c.Assert(err, IsNil)
+	c.Assert(data2, DeepEquals, data)
 }
 
 func (ts *TidbRegionHandlerTestSuite) TestGetMvccNotFound(c *C) {

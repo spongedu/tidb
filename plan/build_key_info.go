@@ -22,7 +22,7 @@ import (
 
 type buildKeySolver struct{}
 
-func (s *buildKeySolver) optimize(lp LogicalPlan, _ context.Context, _ *idAllocator) (LogicalPlan, error) {
+func (s *buildKeySolver) optimize(lp LogicalPlan, _ context.Context) (LogicalPlan, error) {
 	lp.buildKeyInfo()
 	return lp, nil
 }
@@ -166,7 +166,7 @@ func (p *LogicalJoin) buildKeyInfo() {
 
 func (p *DataSource) buildKeyInfo() {
 	p.baseLogicalPlan.buildKeyInfo()
-	indices, _ := availableIndices(p.indexHints, p.tableInfo)
+	indices := p.availableIndices.indices
 	for _, idx := range indices {
 		if !idx.Unique {
 			continue

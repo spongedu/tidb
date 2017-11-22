@@ -32,7 +32,7 @@ import (
 
 // Error instances.
 var (
-	ErrUnsupportedType      = terror.ClassOptimizerPlan.New(CodeUnsupportedType, "Unsupported type")
+	ErrUnsupportedType      = terror.ClassOptimizerPlan.New(CodeUnsupportedType, "Unsupported type %T")
 	SystemInternalErrorType = terror.ClassOptimizerPlan.New(SystemInternalError, "System internal error")
 	ErrUnknownColumn        = terror.ClassOptimizerPlan.New(CodeUnknownColumn, mysql.MySQLErrName[mysql.ErrBadField])
 	ErrUnknownTable         = terror.ClassOptimizerPlan.New(CodeUnknownTable, mysql.MySQLErrName[mysql.ErrUnknownTable])
@@ -43,6 +43,7 @@ var (
 	ErrBadGeneratedColumn   = terror.ClassOptimizerPlan.New(CodeBadGeneratedColumn, mysql.MySQLErrName[mysql.ErrBadGeneratedColumn])
 	ErrFieldNotInGroupBy    = terror.ClassOptimizerPlan.New(CodeFieldNotInGroupBy, mysql.MySQLErrName[mysql.ErrFieldNotInGroupBy])
 	ErrBadTable             = terror.ClassOptimizerPlan.New(CodeBadTable, mysql.MySQLErrName[mysql.ErrBadTable])
+	ErrKeyDoesNotExist      = terror.ClassOptimizerPlan.New(CodeKeyDoesNotExist, mysql.MySQLErrName[mysql.ErrKeyDoesNotExist])
 )
 
 // Error codes.
@@ -58,6 +59,7 @@ const (
 	CodeBadGeneratedColumn                = mysql.ErrBadGeneratedColumn
 	CodeFieldNotInGroupBy                 = mysql.ErrFieldNotInGroupBy
 	CodeBadTable                          = mysql.ErrBadTable
+	CodeKeyDoesNotExist                   = mysql.ErrKeyDoesNotExist
 )
 
 func init() {
@@ -69,6 +71,7 @@ func init() {
 		CodeBadGeneratedColumn: mysql.ErrBadGeneratedColumn,
 		CodeFieldNotInGroupBy:  mysql.ErrFieldNotInGroupBy,
 		CodeBadTable:           mysql.ErrBadTable,
+		CodeKeyDoesNotExist:    mysql.ErrKeyDoesNotExist,
 	}
 	terror.ErrClassToMySQLCodes[terror.ClassOptimizerPlan] = tableMySQLErrCodes
 }
@@ -148,13 +151,11 @@ var clauseMsg = map[clauseCode]string{
 // planBuilder builds Plan from an ast.Node.
 // It just builds the ast node straightforwardly.
 type planBuilder struct {
-	err           error
-	allocator     *idAllocator
-	ctx           context.Context
-	is            infoschema.InfoSchema
-	outerSchemas  []*expression.Schema
-	inUpdateStmt  bool
-	needColHandle int
+	err          error
+	ctx          context.Context
+	is           infoschema.InfoSchema
+	outerSchemas []*expression.Schema
+	inUpdateStmt bool
 	// colMapper stores the column that must be pre-resolved.
 	colMapper map[*ast.ColumnNameExpr]int
 	// Collect the visit information for privilege check.
@@ -225,7 +226,7 @@ func (b *planBuilder) buildExecute(v *ast.ExecuteStmt) Plan {
 
 func (b *planBuilder) buildDo(v *ast.DoStmt) Plan {
 	exprs := make([]expression.Expression, 0, len(v.Exprs))
-	dual := TableDual{RowCount: 1}.init(b.allocator, b.ctx)
+	dual := TableDual{RowCount: 1}.init(b.ctx)
 	for _, astExpr := range v.Exprs {
 		expr, _, err := b.rewrite(astExpr, dual, nil, true)
 		if err != nil {
@@ -235,7 +236,7 @@ func (b *planBuilder) buildDo(v *ast.DoStmt) Plan {
 		exprs = append(exprs, expr)
 	}
 	dual.SetSchema(expression.NewSchema())
-	p := Projection{Exprs: exprs}.init(b.allocator, b.ctx)
+	p := Projection{Exprs: exprs}.init(b.ctx)
 	setParentAndChildren(p, dual)
 	p.self = p
 	p.SetSchema(expression.NewSchema())
@@ -255,7 +256,7 @@ func (b *planBuilder) buildSet(v *ast.SetStmt) Plan {
 				// Convert column name expression to string value expression.
 				vars.Value = ast.NewValueExpr(cn.Name.Name.O)
 			}
-			mockTablePlan := TableDual{}.init(b.allocator, b.ctx)
+			mockTablePlan := TableDual{}.init(b.ctx)
 			mockTablePlan.SetSchema(expression.NewSchema())
 			assign.Expr, _, b.err = b.rewrite(vars.Value, mockTablePlan, nil, true)
 			if b.err != nil {
@@ -301,7 +302,7 @@ func (b *planBuilder) detectSelectAgg(sel *ast.SelectStmt) bool {
 	return false
 }
 
-func availableIndices(hints []*ast.IndexHint, tableInfo *model.TableInfo) (indices []*model.IndexInfo, includeTableScan bool) {
+func availableIndices(hints []*ast.IndexHint, tableInfo *model.TableInfo) (indices []*model.IndexInfo, includeTableScan bool, err error) {
 	var usableHints []*ast.IndexHint
 	for _, hint := range hints {
 		if hint.HintScope == ast.HintForScan {
@@ -315,7 +316,7 @@ func availableIndices(hints []*ast.IndexHint, tableInfo *model.TableInfo) (indic
 		}
 	}
 	if len(usableHints) == 0 {
-		return publicIndices, true
+		return publicIndices, true, nil
 	}
 	var hasUse bool
 	var ignores []*model.IndexInfo
@@ -328,6 +329,8 @@ func availableIndices(hints []*ast.IndexHint, tableInfo *model.TableInfo) (indic
 				idx := findIndexByName(publicIndices, idxName)
 				if idx != nil {
 					indices = append(indices, idx)
+				} else {
+					return nil, true, ErrKeyDoesNotExist.GenByArgs(idxName, tableInfo.Name)
 				}
 			}
 		case ast.HintIgnore:
@@ -336,6 +339,8 @@ func availableIndices(hints []*ast.IndexHint, tableInfo *model.TableInfo) (indic
 				idx := findIndexByName(publicIndices, idxName)
 				if idx != nil {
 					ignores = append(ignores, idx)
+				} else {
+					return nil, true, ErrKeyDoesNotExist.GenByArgs(idxName, tableInfo.Name)
 				}
 			}
 		}
@@ -343,13 +348,13 @@ func availableIndices(hints []*ast.IndexHint, tableInfo *model.TableInfo) (indic
 	indices = removeIgnores(indices, ignores)
 	// If we have got FORCE or USE index hint, table scan is excluded.
 	if len(indices) != 0 {
-		return indices, false
+		return indices, false, nil
 	}
 	if hasUse {
 		// Empty use hint means don't use any index.
-		return nil, true
+		return nil, true, nil
 	}
-	return removeIgnores(publicIndices, ignores), true
+	return removeIgnores(publicIndices, ignores), true, nil
 }
 
 func removeIgnores(indices, ignores []*model.IndexInfo) []*model.IndexInfo {
@@ -375,7 +380,7 @@ func findIndexByName(indices []*model.IndexInfo, name model.CIStr) *model.IndexI
 }
 
 func (b *planBuilder) buildSelectLock(src Plan, lock ast.SelectLockType) *SelectLock {
-	selectLock := SelectLock{Lock: lock}.init(b.allocator, b.ctx)
+	selectLock := SelectLock{Lock: lock}.init(b.ctx)
 	setParentAndChildren(selectLock, src)
 	selectLock.SetSchema(src.Schema())
 	return selectLock
@@ -430,16 +435,12 @@ func getColsInfo(tn *ast.TableName) (indicesInfo []*model.IndexInfo, colsInfo []
 			}
 		}
 	}
-	indices, _ := availableIndices(tn.IndexHints, tn.TableInfo)
-	for _, index := range indices {
-		for _, idx := range tn.TableInfo.Indices {
-			if index.Name.L == idx.Name.L {
-				indicesInfo = append(indicesInfo, idx)
-				break
+	for _, idx := range tn.TableInfo.Indices {
+		if idx.State == model.StatePublic {
+			indicesInfo = append(indicesInfo, idx)
+			if len(idx.Columns) == 1 {
+				idxNames = append(idxNames, idx.Columns[0].Name.L)
 			}
-		}
-		if len(index.Columns) == 1 {
-			idxNames = append(idxNames, index.Columns[0].Name.L)
 		}
 	}
 	for _, col := range tbl.Columns {
@@ -574,7 +575,7 @@ func (b *planBuilder) buildShow(show *ast.ShowStmt) Plan {
 		Flag:   show.Flag,
 		Full:   show.Full,
 		User:   show.User,
-	}.init(b.allocator, b.ctx)
+	}.init(b.ctx)
 	resultPlan = p
 	switch showTp := show.Tp; showTp {
 	case ast.ShowProcedureStatus:
@@ -622,7 +623,7 @@ func (b *planBuilder) buildShow(show *ast.ShowStmt) Plan {
 		}
 	}
 	if len(conditions) != 0 {
-		sel := Selection{Conditions: conditions}.init(b.allocator, b.ctx)
+		sel := Selection{Conditions: conditions}.init(b.ctx)
 		setParentAndChildren(sel, p)
 		sel.SetSchema(p.Schema())
 		resultPlan = sel
@@ -758,7 +759,7 @@ func (b *planBuilder) buildInsert(insert *ast.InsertStmt) Plan {
 		IsReplace:   insert.IsReplace,
 		Priority:    insert.Priority,
 		IgnoreErr:   insert.IgnoreErr,
-	}.init(b.allocator, b.ctx)
+	}.init(b.ctx)
 
 	b.visitInfo = append(b.visitInfo, visitInfo{
 		privilege: mysql.InsertPriv,
@@ -784,7 +785,7 @@ func (b *planBuilder) buildInsert(insert *ast.InsertStmt) Plan {
 		}
 	}
 
-	mockTablePlan := TableDual{}.init(b.allocator, b.ctx)
+	mockTablePlan := TableDual{}.init(b.ctx)
 	mockTablePlan.SetSchema(schema)
 
 	checkRefColumn := func(n ast.Node) ast.Node {
@@ -948,7 +949,7 @@ func (b *planBuilder) buildLoadData(ld *ast.LoadDataStmt) Plan {
 		return nil
 	}
 	schema := expression.TableInfo2Schema(tableInfo)
-	mockTablePlan := TableDual{}.init(b.allocator, b.ctx)
+	mockTablePlan := TableDual{}.init(b.ctx)
 	mockTablePlan.SetSchema(schema)
 	p.GenCols = b.resolveGeneratedColumns(tableInPlan.Cols(), nil, mockTablePlan)
 	p.SetSchema(expression.NewSchema())

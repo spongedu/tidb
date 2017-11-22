@@ -17,6 +17,8 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb"
 	"github.com/pingcap/tidb/context"
+	"github.com/pingcap/tidb/infoschema"
+	"github.com/pingcap/tidb/model"
 	"github.com/pingcap/tidb/parser"
 	"github.com/pingcap/tidb/plan"
 	"github.com/pingcap/tidb/util/testleak"
@@ -27,9 +29,12 @@ var _ = Suite(&testPlanSuite{})
 
 type testPlanSuite struct {
 	*parser.Parser
+
+	is infoschema.InfoSchema
 }
 
 func (s *testPlanSuite) SetUpSuite(c *C) {
+	s.is = infoschema.MockInfoSchema([]*model.TableInfo{plan.MockTable()})
 	s.Parser = parser.New()
 }
 
@@ -49,11 +54,6 @@ func (s *testPlanSuite) TestDAGPlanBuilderSimpleCase(c *C) {
 		sql  string
 		best string
 	}{
-		// Test unready index hint.
-		{
-			sql:  "select * from t t1 use index(e)",
-			best: "TableReader(Table(t))",
-		},
 		// Test index hint.
 		{
 			sql:  "select * from t t1 use index(c_d_e)",
@@ -179,9 +179,7 @@ func (s *testPlanSuite) TestDAGPlanBuilderSimpleCase(c *C) {
 
 		err = se.NewTxn()
 		c.Assert(err, IsNil)
-		is, err := plan.MockPreprocess(stmt, false)
-		c.Assert(err, IsNil)
-		p, err := plan.Optimize(se, stmt, is)
+		p, err := plan.Optimize(se, stmt, s.is)
 		c.Assert(err, IsNil)
 		c.Assert(plan.ToString(p), Equals, tt.best, Commentf("for %s", tt.sql))
 	}
@@ -351,9 +349,7 @@ func (s *testPlanSuite) TestDAGPlanBuilderJoin(c *C) {
 		stmt, err := s.ParseOneStmt(tt.sql, "", "")
 		c.Assert(err, IsNil, comment)
 
-		is, err := plan.MockPreprocess(stmt, false)
-		c.Assert(err, IsNil)
-		p, err := plan.Optimize(se, stmt, is)
+		p, err := plan.Optimize(se, stmt, s.is)
 		c.Assert(err, IsNil)
 		c.Assert(plan.ToString(p), Equals, tt.best, Commentf("for %s", tt.sql))
 	}
@@ -423,9 +419,7 @@ func (s *testPlanSuite) TestDAGPlanBuilderSubquery(c *C) {
 		stmt, err := s.ParseOneStmt(tt.sql, "", "")
 		c.Assert(err, IsNil, comment)
 
-		is, err := plan.MockPreprocess(stmt, false)
-		c.Assert(err, IsNil)
-		p, err := plan.Optimize(se, stmt, is)
+		p, err := plan.Optimize(se, stmt, s.is)
 		c.Assert(err, IsNil)
 		c.Assert(plan.ToString(p), Equals, tt.best, Commentf("for %s", tt.sql))
 	}
@@ -482,9 +476,7 @@ func (s *testPlanSuite) TestDAGPlanTopN(c *C) {
 		stmt, err := s.ParseOneStmt(tt.sql, "", "")
 		c.Assert(err, IsNil, comment)
 
-		is, err := plan.MockPreprocess(stmt, false)
-		c.Assert(err, IsNil)
-		p, err := plan.Optimize(se, stmt, is)
+		p, err := plan.Optimize(se, stmt, s.is)
 		c.Assert(err, IsNil)
 		c.Assert(plan.ToString(p), Equals, tt.best, Commentf("for %s", tt.sql))
 	}
@@ -565,9 +557,8 @@ func (s *testPlanSuite) TestDAGPlanBuilderBasePhysicalPlan(c *C) {
 		stmt, err := s.ParseOneStmt(tt.sql, "", "")
 		c.Assert(err, IsNil, comment)
 
-		is, err := plan.MockPreprocess(stmt, false)
-		c.Assert(err, IsNil)
-		p, err := plan.Optimize(se, stmt, is)
+		plan.Preprocess(se, stmt, s.is, false)
+		p, err := plan.Optimize(se, stmt, s.is)
 		c.Assert(err, IsNil)
 		c.Assert(plan.ToString(p), Equals, tt.best, Commentf("for %s", tt.sql))
 	}
@@ -616,9 +607,7 @@ func (s *testPlanSuite) TestDAGPlanBuilderUnion(c *C) {
 		stmt, err := s.ParseOneStmt(tt.sql, "", "")
 		c.Assert(err, IsNil, comment)
 
-		is, err := plan.MockPreprocess(stmt, false)
-		c.Assert(err, IsNil)
-		p, err := plan.Optimize(se, stmt, is)
+		p, err := plan.Optimize(se, stmt, s.is)
 		c.Assert(err, IsNil)
 		c.Assert(plan.ToString(p), Equals, tt.best, Commentf("for %s", tt.sql))
 	}
@@ -672,7 +661,7 @@ func (s *testPlanSuite) TestDAGPlanBuilderUnionScan(c *C) {
 		},
 		{
 			sql:  "select c from t where c = 1",
-			best: "IndexReader(Index(t.c_d_e)[[1,1]])->UnionScan([eq(test.t.c, 1)])",
+			best: "IndexReader(Index(t.c_d_e)[[1,1]])->UnionScan([eq(test.t.c, 1)])->Projection",
 		},
 	}
 	for _, tt := range tests {
@@ -680,14 +669,11 @@ func (s *testPlanSuite) TestDAGPlanBuilderUnionScan(c *C) {
 		stmt, err := s.ParseOneStmt(tt.sql, "", "")
 		c.Assert(err, IsNil, comment)
 
-		is, err := plan.MockPreprocess(stmt, false)
-		c.Assert(err, IsNil)
-
 		err = se.NewTxn()
 		c.Assert(err, IsNil)
 		// Make txn not read only.
 		se.Txn().Set(nil, nil)
-		p, err := plan.Optimize(se, stmt, is)
+		p, err := plan.Optimize(se, stmt, s.is)
 		c.Assert(err, IsNil)
 		c.Assert(plan.ToString(p), Equals, tt.best, Commentf("for %s", tt.sql))
 	}
@@ -827,9 +813,7 @@ func (s *testPlanSuite) TestDAGPlanBuilderAgg(c *C) {
 		stmt, err := s.ParseOneStmt(tt.sql, "", "")
 		c.Assert(err, IsNil, comment)
 
-		is, err := plan.MockPreprocess(stmt, false)
-		c.Assert(err, IsNil)
-		p, err := plan.Optimize(se, stmt, is)
+		p, err := plan.Optimize(se, stmt, s.is)
 		c.Assert(err, IsNil)
 		c.Assert(plan.ToString(p), Equals, tt.best, Commentf("for %s", tt.sql))
 	}
@@ -1059,9 +1043,7 @@ func (s *testPlanSuite) TestRefine(c *C) {
 		c.Assert(err, IsNil, comment)
 		sc := se.(context.Context).GetSessionVars().StmtCtx
 		sc.IgnoreTruncate = false
-		is, err := plan.MockPreprocess(stmt, false)
-		c.Assert(err, IsNil, comment)
-		p, err := plan.Optimize(se, stmt, is)
+		p, err := plan.Optimize(se, stmt, s.is)
 		c.Assert(err, IsNil)
 		c.Assert(plan.ToString(p), Equals, tt.best, Commentf("for %s", tt.sql))
 	}
