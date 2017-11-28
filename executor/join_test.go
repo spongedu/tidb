@@ -21,6 +21,7 @@ import (
 	"github.com/pingcap/tidb/plan"
 	"github.com/pingcap/tidb/util/testkit"
 	"github.com/pingcap/tidb/util/testleak"
+	goctx "golang.org/x/net/context"
 )
 
 func (s *testSuite) TestJoinPanic(c *C) {
@@ -477,6 +478,8 @@ func (s *testSuite) TestSubquery(c *C) {
 	result.Check(testkit.Rows("1", "2", "3"))
 	result = tk.MustQuery("select t.c from t where (t.c, t.d) not in (select * from t)")
 	result.Check(testkit.Rows())
+	result = tk.MustQuery("select * from t A inner join t B on A.c = B.c and A.c > 100")
+	result.Check(testkit.Rows())
 	// = all empty set is true
 	result = tk.MustQuery("select t.c from t where (t.c, t.d) != all (select * from t where d > 1000)")
 	result.Check(testkit.Rows("1", "2", "3"))
@@ -527,7 +530,7 @@ func (s *testSuite) TestSubquery(c *C) {
 	result.Sort().Check(testkit.Rows("1", "<nil>", "<nil>"))
 	rs, err := tk.Exec("select (select t.id from t where t.id = t.v and t.v != s.id) from t s")
 	c.Check(err, IsNil)
-	_, err = tidb.GetRows(rs)
+	_, err = tidb.GetRows(goctx.Background(), rs)
 	c.Check(err, NotNil)
 
 	tk.MustExec("drop table if exists t")
@@ -678,7 +681,7 @@ func (s *testSuite) TestJoinLeak(c *C) {
 	tk.MustExec("commit")
 	result, err := tk.Exec("select * from t t1 left join (select 1) t2 on 1")
 	c.Assert(err, IsNil)
-	result.Next()
+	result.Next(goctx.Background())
 	time.Sleep(100 * time.Millisecond)
 	result.Close()
 }

@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package types
+package ranger
 
 import (
 	"fmt"
@@ -20,7 +20,8 @@ import (
 	"strings"
 
 	"github.com/juju/errors"
-	"github.com/pingcap/tidb/sessionctx/variable"
+	"github.com/pingcap/tidb/sessionctx/stmtctx"
+	"github.com/pingcap/tidb/types"
 )
 
 // Range is the interface of the three type of range.
@@ -51,9 +52,6 @@ func (tr IntColumnRange) String() string {
 	}
 	if tr.HighVal == math.MaxInt64 {
 		r = "+inf)"
-	} else if tr.HighVal == math.MinInt64 {
-		// This branch is for nil
-		r = "-inf)"
 	} else {
 		r = strconv.FormatInt(tr.HighVal, 10) + "]"
 	}
@@ -77,8 +75,8 @@ func (tr IntColumnRange) Convert2IndexRange() *IndexRange {
 
 // ColumnRange represents a range for a column.
 type ColumnRange struct {
-	Low      Datum
-	High     Datum
+	Low      types.Datum
+	High     types.Datum
 	LowExcl  bool
 	HighExcl bool
 }
@@ -115,8 +113,8 @@ func (cr *ColumnRange) Convert2IndexRange() *IndexRange {
 
 // IndexRange represents a range for an index.
 type IndexRange struct {
-	LowVal  []Datum
-	HighVal []Datum
+	LowVal  []types.Datum
+	HighVal []types.Datum
 
 	LowExclude  bool // Low value is exclusive.
 	HighExclude bool // High value is exclusive.
@@ -125,8 +123,8 @@ type IndexRange struct {
 // Clone clones a IndexRange.
 func (ir *IndexRange) Clone() *IndexRange {
 	newRange := &IndexRange{
-		LowVal:      make([]Datum, 0, len(ir.LowVal)),
-		HighVal:     make([]Datum, 0, len(ir.HighVal)),
+		LowVal:      make([]types.Datum, 0, len(ir.LowVal)),
+		HighVal:     make([]types.Datum, 0, len(ir.HighVal)),
 		LowExclude:  ir.LowExclude,
 		HighExclude: ir.HighExclude,
 	}
@@ -140,14 +138,14 @@ func (ir *IndexRange) Clone() *IndexRange {
 }
 
 // IsPoint returns if the index range is a point.
-func (ir *IndexRange) IsPoint(sc *variable.StatementContext) bool {
+func (ir *IndexRange) IsPoint(sc *stmtctx.StatementContext) bool {
 	if len(ir.LowVal) != len(ir.HighVal) {
 		return false
 	}
 	for i := range ir.LowVal {
 		a := ir.LowVal[i]
 		b := ir.HighVal[i]
-		if a.Kind() == KindMinNotNull || b.Kind() == KindMaxValue {
+		if a.Kind() == types.KindMinNotNull || b.Kind() == types.KindMaxValue {
 			return false
 		}
 		cmp, err := a.CompareDatum(sc, &b)
@@ -200,23 +198,23 @@ func (ir *IndexRange) Convert2IndexRange() *IndexRange {
 func (ir *IndexRange) Align(numColumns int) {
 	for i := len(ir.LowVal); i < numColumns; i++ {
 		if ir.LowExclude {
-			ir.LowVal = append(ir.LowVal, MaxValueDatum())
+			ir.LowVal = append(ir.LowVal, types.MaxValueDatum())
 		} else {
-			ir.LowVal = append(ir.LowVal, Datum{})
+			ir.LowVal = append(ir.LowVal, types.Datum{})
 		}
 	}
 	for i := len(ir.HighVal); i < numColumns; i++ {
 		if ir.HighExclude {
-			ir.HighVal = append(ir.HighVal, Datum{})
+			ir.HighVal = append(ir.HighVal, types.Datum{})
 		} else {
-			ir.HighVal = append(ir.HighVal, MaxValueDatum())
+			ir.HighVal = append(ir.HighVal, types.MaxValueDatum())
 		}
 	}
 }
 
 // PrefixEqualLen tells you how long the prefix of the range is a point.
 // e.g. If this range is (1 2 3, 1 2 +inf), then the return value is 2.
-func (ir *IndexRange) PrefixEqualLen(sc *variable.StatementContext) (int, error) {
+func (ir *IndexRange) PrefixEqualLen(sc *stmtctx.StatementContext) (int, error) {
 	// Here, len(ir.LowVal) always equal to len(ir.HighVal)
 	for i := 0; i < len(ir.LowVal); i++ {
 		cmp, err := ir.LowVal[i].CompareDatum(sc, &ir.HighVal[i])
@@ -230,11 +228,11 @@ func (ir *IndexRange) PrefixEqualLen(sc *variable.StatementContext) (int, error)
 	return len(ir.LowVal), nil
 }
 
-func formatDatum(d Datum) string {
-	if d.Kind() == KindMinNotNull {
+func formatDatum(d types.Datum) string {
+	if d.Kind() == types.KindMinNotNull {
 		return "-inf"
 	}
-	if d.Kind() == KindMaxValue {
+	if d.Kind() == types.KindMaxValue {
 		return "+inf"
 	}
 	return fmt.Sprintf("%v", d.GetValue())

@@ -109,9 +109,14 @@ func (p LogicalApply) init(ctx context.Context) *LogicalApply {
 	return &p
 }
 
-func (p Selection) init(ctx context.Context) *Selection {
+func (p LogicalSelection) init(ctx context.Context) *LogicalSelection {
 	p.basePlan = newBasePlan(TypeSel, ctx, &p)
 	p.baseLogicalPlan = newBaseLogicalPlan(p.basePlan)
+	return &p
+}
+
+func (p PhysicalSelection) init(ctx context.Context) *PhysicalSelection {
+	p.basePlan = newBasePlan(TypeSel, ctx, &p)
 	p.basePhysicalPlan = newBasePhysicalPlan(p.basePlan)
 	return &p
 }
@@ -280,7 +285,6 @@ func (p PhysicalIndexLookUpReader) init(ctx context.Context) *PhysicalIndexLookU
 	p.basePhysicalPlan = newBasePhysicalPlan(p.basePlan)
 	p.TablePlans = flattenPushDownPlan(p.tablePlan)
 	p.IndexPlans = flattenPushDownPlan(p.indexPlan)
-	p.NeedColHandle = p.IndexPlans[0].(*PhysicalIndexScan).NeedColHandle
 	p.schema = p.tablePlan.Schema()
 	return &p
 }
@@ -289,7 +293,6 @@ func (p PhysicalTableReader) init(ctx context.Context) *PhysicalTableReader {
 	p.basePlan = newBasePlan(TypeTableReader, ctx, &p)
 	p.basePhysicalPlan = newBasePhysicalPlan(p.basePlan)
 	p.TablePlans = flattenPushDownPlan(p.tablePlan)
-	p.NeedColHandle = p.TablePlans[0].(*PhysicalTableScan).NeedColHandle
 	p.schema = p.tablePlan.Schema()
 	return &p
 }
@@ -298,7 +301,6 @@ func (p PhysicalIndexReader) init(ctx context.Context) *PhysicalIndexReader {
 	p.basePlan = newBasePlan(TypeIndexReader, ctx, &p)
 	p.basePhysicalPlan = newBasePhysicalPlan(p.basePlan)
 	p.IndexPlans = flattenPushDownPlan(p.indexPlan)
-	p.NeedColHandle = p.IndexPlans[0].(*PhysicalIndexScan).NeedColHandle
 	if _, ok := p.indexPlan.(*PhysicalAggregation); ok {
 		p.schema = p.indexPlan.Schema()
 	} else {
