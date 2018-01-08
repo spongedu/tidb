@@ -35,31 +35,31 @@ import (
 
 // ShowDDL is for showing DDL information.
 type ShowDDL struct {
-	basePlan
+	baseSchemaProducer
 }
 
 // ShowDDLJobs is for showing DDL job list.
 type ShowDDLJobs struct {
-	basePlan
+	baseSchemaProducer
 }
 
 // CheckTable is used for checking table data, built from the 'admin check table' statement.
 type CheckTable struct {
-	basePlan
+	baseSchemaProducer
 
 	Tables []*ast.TableName
 }
 
 // CancelDDLJobs represents a cancel DDL jobs plan.
 type CancelDDLJobs struct {
-	basePlan
+	baseSchemaProducer
 
 	JobIDs []int64
 }
 
 // Prepare represents prepare plan.
 type Prepare struct {
-	basePlan
+	baseSchemaProducer
 
 	Name    string
 	SQLText string
@@ -75,7 +75,7 @@ type Prepared struct {
 
 // Execute represents prepare plan.
 type Execute struct {
-	basePlan
+	baseSchemaProducer
 
 	Name      string
 	UsingVars []expression.Expression
@@ -167,11 +167,11 @@ func (e *Execute) rebuildRange(p Plan) error {
 		}
 		newRanges := ranger.FullIntRange()
 		if pkCol != nil {
-			ranges, err := ranger.BuildRange(sc, ts.AccessCondition, ranger.IntRangeType, []*expression.Column{pkCol}, nil)
+			ranges, err := ranger.BuildTableRange(ts.AccessCondition, sc)
 			if err != nil {
 				return errors.Trace(err)
 			}
-			newRanges = ranger.Ranges2IntRanges(ranges)
+			newRanges = ranges
 		}
 		ts.Ranges = newRanges
 	case *PhysicalIndexReader:
@@ -200,30 +200,30 @@ func (e *Execute) rebuildRange(p Plan) error {
 	return nil
 }
 
-func (e *Execute) buildRangeForIndexScan(sc *stmtctx.StatementContext, is *PhysicalIndexScan) ([]*ranger.IndexRange, error) {
+func (e *Execute) buildRangeForIndexScan(sc *stmtctx.StatementContext, is *PhysicalIndexScan) ([]*ranger.NewRange, error) {
 	cols := expression.ColumnInfos2ColumnsWithDBName(is.DBName, is.Table.Name, is.Columns)
 	idxCols, colLengths := expression.IndexInfo2Cols(cols, is.Index)
-	newRanges := ranger.FullIndexRange()
+	newRanges := ranger.FullNewRange()
 	if len(idxCols) > 0 {
-		ranges, err := ranger.BuildRange(sc, is.AccessCondition, ranger.IndexRangeType, idxCols, colLengths)
+		ranges, err := ranger.BuildIndexRange(sc, idxCols, colLengths, is.AccessCondition)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		newRanges = ranger.Ranges2IndexRanges(ranges)
+		newRanges = ranges
 	}
 	return newRanges, nil
 }
 
 // Deallocate represents deallocate plan.
 type Deallocate struct {
-	basePlan
+	baseSchemaProducer
 
 	Name string
 }
 
 // Show represents a show plan.
 type Show struct {
-	basePlan
+	baseSchemaProducer
 
 	Tp     ast.ShowStmtType // Databases/Tables/Columns/....
 	DBName string
@@ -241,14 +241,14 @@ type Show struct {
 
 // Set represents a plan for set stmt.
 type Set struct {
-	basePlan
+	baseSchemaProducer
 
 	VarAssigns []*expression.VarAssignment
 }
 
 // Simple represents a simple statement plan which doesn't need any optimization.
 type Simple struct {
-	basePlan
+	baseSchemaProducer
 
 	Statement ast.StmtNode
 }
@@ -263,7 +263,7 @@ type InsertGeneratedColumns struct {
 
 // Insert represents an insert plan.
 type Insert struct {
-	basePlan
+	baseSchemaProducer
 
 	Table       table.Table
 	tableSchema *expression.Schema
@@ -286,7 +286,7 @@ type Insert struct {
 
 // Update represents Update plan.
 type Update struct {
-	basePlan
+	baseSchemaProducer
 
 	OrderedList []*expression.Assignment
 	IgnoreErr   bool
@@ -296,7 +296,7 @@ type Update struct {
 
 // Delete represents a delete plan.
 type Delete struct {
-	basePlan
+	baseSchemaProducer
 
 	Tables       []*ast.TableName
 	IsMultiTable bool
@@ -319,7 +319,7 @@ type AnalyzeIndexTask struct {
 
 // Analyze represents an analyze plan
 type Analyze struct {
-	basePlan
+	baseSchemaProducer
 
 	ColTasks []AnalyzeColumnsTask
 	IdxTasks []AnalyzeIndexTask
@@ -327,7 +327,7 @@ type Analyze struct {
 
 // LoadData represents a loaddata plan.
 type LoadData struct {
-	basePlan
+	baseSchemaProducer
 
 	IsLocal    bool
 	Path       string
@@ -341,14 +341,14 @@ type LoadData struct {
 
 // DDL represents a DDL statement plan.
 type DDL struct {
-	basePlan
+	baseSchemaProducer
 
 	Statement ast.DDLNode
 }
 
 // Explain represents a explain plan.
 type Explain struct {
-	basePlan
+	baseSchemaProducer
 
 	StmtPlan       Plan
 	Rows           [][]string
@@ -422,8 +422,8 @@ func (e *Explain) prepareTaskDot(p PhysicalPlan, taskTp string, buffer *bytes.Bu
 		return
 	}
 
-	copTasks := []Plan{}
-	pipelines := []string{}
+	var copTasks []Plan
+	var pipelines []string
 
 	for planQueue := []Plan{p}; len(planQueue) > 0; planQueue = planQueue[1:] {
 		curPlan := planQueue[0]

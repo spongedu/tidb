@@ -54,11 +54,11 @@ const (
 	ErrExprInOrderBy = "ORDER BY"
 )
 
-func (p *LogicalAggregation) collectGroupByColumns() {
-	p.groupByCols = p.groupByCols[:0]
-	for _, item := range p.GroupByItems {
+func (la *LogicalAggregation) collectGroupByColumns() {
+	la.groupByCols = la.groupByCols[:0]
+	for _, item := range la.GroupByItems {
 		if col, ok := item.(*expression.Column); ok {
-			p.groupByCols = append(p.groupByCols, col)
+			la.groupByCols = append(la.groupByCols, col)
 		}
 	}
 }
@@ -66,13 +66,19 @@ func (p *LogicalAggregation) collectGroupByColumns() {
 func (b *planBuilder) buildAggregation(p LogicalPlan, aggFuncList []*ast.AggregateFuncExpr, gbyItems []expression.Expression) (LogicalPlan, map[int]int) {
 	b.optFlag = b.optFlag | flagBuildKeyInfo
 	b.optFlag = b.optFlag | flagAggregationOptimize
+	// We may apply aggregation eliminate optimization.
+	// So we add the flagMaxMinEliminate to try to convert max/min to topn and flagPushDownTopN to handle the newly added topn operator.
+	b.optFlag = b.optFlag | flagMaxMinEliminate
+	b.optFlag = b.optFlag | flagPushDownTopN
+	// when we eliminate the max and min we may add `is not null` filter.
+	b.optFlag = b.optFlag | flagPredicatePushDown
 
 	agg := LogicalAggregation{AggFuncs: make([]aggregation.Aggregation, 0, len(aggFuncList))}.init(b.ctx)
 	schema := expression.NewSchema(make([]*expression.Column, 0, len(aggFuncList)+p.Schema().Len())...)
 	// aggIdxMap maps the old index to new index after applying common aggregation functions elimination.
 	aggIndexMap := make(map[int]int)
 	for i, aggFunc := range aggFuncList {
-		var newArgList []expression.Expression
+		newArgList := make([]expression.Expression, 0, len(aggFunc.Args))
 		for _, arg := range aggFunc.Args {
 			newArg, np, err := b.rewrite(arg, p, nil, true)
 			if err != nil {
@@ -432,7 +438,7 @@ func (b *planBuilder) buildSelection(p LogicalPlan, where ast.ExprNode, AggMappe
 				} else {
 					// If there is condition which is always false, return dual plan directly.
 					dual := LogicalTableDual{}.init(b.ctx)
-					dual.SetSchema(p.Schema().Clone())
+					dual.SetSchema(p.Schema())
 					return dual
 				}
 			}
@@ -443,7 +449,6 @@ func (b *planBuilder) buildSelection(p LogicalPlan, where ast.ExprNode, AggMappe
 		return p
 	}
 	selection.Conditions = expressions
-	selection.SetSchema(p.Schema().Clone())
 	selection.SetChildren(p)
 	return selection
 }
@@ -628,9 +633,8 @@ func (b *planBuilder) buildProjection4Union(u *LogicalUnionAll) {
 			proj.SetChildren(child)
 			u.children[childID] = proj
 		}
-		u.children[childID].SetSchema(unionSchema.Clone())
+		u.children[childID].(*LogicalProjection).SetSchema(unionSchema.Clone())
 	}
-	u.SetSchema(unionSchema)
 }
 
 func (b *planBuilder) buildUnion(union *ast.UnionStmt) LogicalPlan {
@@ -695,7 +699,6 @@ func (b *planBuilder) buildSort(p LogicalPlan, byItems []*ast.ByItem, aggMapper 
 	}
 	sort.ByItems = exprs
 	sort.SetChildren(p)
-	sort.SetSchema(p.Schema().Clone())
 	return sort
 }
 
@@ -746,7 +749,6 @@ func (b *planBuilder) buildLimit(src LogicalPlan, limit *ast.Limit) LogicalPlan 
 		Count:  count,
 	}.init(b.ctx)
 	li.SetChildren(src)
-	li.SetSchema(src.Schema().Clone())
 	return li
 }
 
@@ -1549,7 +1551,6 @@ func (b *planBuilder) buildSelect(sel *ast.SelectStmt) LogicalPlan {
 
 func (b *planBuilder) buildTableDual() LogicalPlan {
 	dual := LogicalTableDual{RowCount: 1}.init(b.ctx)
-	dual.SetSchema(expression.NewSchema())
 	return dual
 }
 
@@ -1641,7 +1642,6 @@ func (b *planBuilder) buildDataSource(tn *ast.TableName) LogicalPlan {
 	var result LogicalPlan = ds
 	if b.ctx.Txn() != nil && !b.ctx.Txn().IsReadOnly() {
 		us := LogicalUnionScan{}.init(b.ctx)
-		us.SetSchema(ds.Schema().Clone())
 		us.SetChildren(result)
 		result = us
 	}
@@ -1756,7 +1756,6 @@ out:
 func (b *planBuilder) buildMaxOneRow(p LogicalPlan) LogicalPlan {
 	maxOneRow := LogicalMaxOneRow{}.init(b.ctx)
 	maxOneRow.SetChildren(p)
-	maxOneRow.SetSchema(p.Schema().Clone())
 	return maxOneRow
 }
 
@@ -1884,7 +1883,7 @@ func (b *planBuilder) buildUpdateLists(tableList []*ast.TableName, list []*ast.A
 
 	for _, tn := range tableList {
 		tableInfo := tn.TableInfo
-		table, found := b.is.TableByID(tableInfo.ID)
+		tableVal, found := b.is.TableByID(tableInfo.ID)
 		if !found {
 			b.err = infoschema.ErrTableNotExists.GenByArgs(tn.DBInfo.Name.O, tableInfo.Name.O)
 			return nil, nil
@@ -1901,7 +1900,7 @@ func (b *planBuilder) buildUpdateLists(tableList []*ast.TableName, list []*ast.A
 			for _, asName := range tableAsName[tableInfo] {
 				virtualAssignments = append(virtualAssignments, &ast.Assignment{
 					Column: &ast.ColumnName{Table: *asName, Name: colInfo.Name},
-					Expr:   table.Cols()[i].GeneratedExpr,
+					Expr:   tableVal.Cols()[i].GeneratedExpr,
 				})
 			}
 		}

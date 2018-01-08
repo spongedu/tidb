@@ -135,6 +135,14 @@ type session struct {
 	statsCollector *statistics.SessionStatsCollector
 }
 
+func (s *session) getMembufCap() int {
+	if s.sessionVars.ImportingData {
+		return kv.ImportingTxnMembufCap
+	}
+
+	return kv.DefaultTxnMembufCap
+}
+
 func (s *session) cleanRetryInfo() {
 	if !s.sessionVars.RetryInfo.Retrying {
 		retryInfo := s.sessionVars.RetryInfo
@@ -727,11 +735,16 @@ func (s *session) Execute(goCtx goctx.Context, sql string) (recordSets []ast.Rec
 			return nil, errors.Trace(err)
 		}
 	} else {
-		charset, collation := s.sessionVars.GetCharsetInfo()
+		err = s.loadCommonGlobalVariablesIfNeeded()
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+
+		charsetInfo, collation := s.sessionVars.GetCharsetInfo()
 
 		// Step1: Compile query string to abstract syntax trees(ASTs).
 		startTS := time.Now()
-		stmtNodes, err := s.ParseSQL(goCtx, sql, charset, collation)
+		stmtNodes, err := s.ParseSQL(goCtx, sql, charsetInfo, collation)
 		if err != nil {
 			log.Warnf("[%d] parse error:\n%v\n%s", connID, err, sql)
 			return nil, errors.Trace(err)
@@ -779,6 +792,12 @@ func (s *session) PrepareStmt(sql string) (stmtID uint32, paramCount int, fields
 		// We don't need to create a transaction for prepare statement, just get information schema will do.
 		s.sessionVars.TxnCtx.InfoSchema = domain.GetDomain(s).InfoSchema()
 	}
+	err = s.loadCommonGlobalVariablesIfNeeded()
+	if err != nil {
+		err = errors.Trace(err)
+		return
+	}
+
 	prepareExec := executor.NewPrepareExec(s, executor.GetInfoSchema(s), sql)
 	err = prepareExec.DoPrepare()
 	return prepareExec.ID, prepareExec.ParamCount, prepareExec.Fields, errors.Trace(err)
@@ -836,6 +855,7 @@ func (s *session) ExecutePreparedStmt(goCtx goctx.Context, stmtID uint32, args .
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+
 	s.PrepareTxnCtx(goCtx)
 	st, err := executor.CompileExecutePreparedStmt(s, stmtID, args...)
 	if err != nil {
@@ -870,6 +890,7 @@ func (s *session) NewTxn() error {
 	if err != nil {
 		return errors.Trace(err)
 	}
+	txn.SetCap(s.getMembufCap())
 	s.txn = txn
 	s.sessionVars.TxnCtx.StartTS = txn.StartTS()
 	return nil
@@ -1035,6 +1056,11 @@ func BootstrapSession(store kv.Storage) (*domain.Domain, error) {
 	}
 
 	return dom, errors.Trace(err)
+}
+
+// GetDomain gets the associated domain for store.
+func GetDomain(store kv.Storage) (*domain.Domain, error) {
+	return domap.Get(store)
 }
 
 // runInBootstrapSession create a special session for boostrap to run.
@@ -1214,8 +1240,8 @@ func (tf *txnFuture) wait() (kv.Transaction, error) {
 
 func (s *session) getTxnFuture(ctx goctx.Context) *txnFuture {
 	span, ctx := opentracing.StartSpanFromContext(ctx, "session.getTxnFuture")
-	oracle := s.store.GetOracle()
-	tsFuture := oracle.GetTimestampAsync(ctx)
+	oracleStore := s.store.GetOracle()
+	tsFuture := oracleStore.GetTimestampAsync(ctx)
 	return &txnFuture{tsFuture, s.store, span}
 }
 
@@ -1259,16 +1285,14 @@ func (s *session) ActivePendingTxn() error {
 	}
 	future := s.txnFuture
 	s.txnFuture = nil
+
 	txn, err := future.wait()
 	if err != nil {
 		return errors.Trace(err)
 	}
+	txn.SetCap(s.getMembufCap())
 	s.txn = txn
 	s.sessionVars.TxnCtx.StartTS = s.txn.StartTS()
-	err = s.loadCommonGlobalVariablesIfNeeded()
-	if err != nil {
-		return errors.Trace(err)
-	}
 	if s.sessionVars.Systems[variable.TxnIsolation] == ast.ReadCommitted {
 		txn.SetOption(kv.IsolationLevel, kv.RC)
 	}
@@ -1283,6 +1307,7 @@ func (s *session) InitTxnWithStartTS(startTS uint64) error {
 	if s.txnFuture == nil {
 		return errors.New("transaction channel is not set")
 	}
+
 	// no need to get txn from txnFutureCh since txn should init with startTs
 	s.txnFuture = nil
 	var err error
@@ -1290,6 +1315,7 @@ func (s *session) InitTxnWithStartTS(startTS uint64) error {
 	if err != nil {
 		return errors.Trace(err)
 	}
+	s.txn.SetCap(s.getMembufCap())
 	err = s.loadCommonGlobalVariablesIfNeeded()
 	if err != nil {
 		return errors.Trace(err)

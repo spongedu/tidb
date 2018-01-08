@@ -107,7 +107,7 @@ type IndexLookUpJoin struct {
 	curBatchSize int
 	exhausted    bool // exhausted means whether all data has been extracted.
 
-	indexRanges   []*ranger.IndexRange
+	indexRanges   []*ranger.NewRange
 	keyOff2IdxOff []int
 }
 
@@ -241,7 +241,7 @@ func (e *IndexLookUpJoin) constructRequestRows(outerRows []Row) ([][]types.Datum
 func (e *IndexLookUpJoin) constructJoinKeys(joinKeys [][]types.Datum) ([][]byte, error) {
 	keys := make([][]byte, 0, len(joinKeys))
 	for _, joinKey := range joinKeys {
-		key, err := codec.EncodeKey(nil, joinKey...)
+		key, err := codec.EncodeKey(e.ctx.GetSessionVars().StmtCtx, nil, joinKey...)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
