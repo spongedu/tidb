@@ -81,6 +81,8 @@ func (e *DDLExec) Next(ctx context.Context, chk *chunk.Chunk) (err error) {
 		err = e.executeCreateDatabase(x)
 	case *ast.CreateTableStmt:
 		err = e.executeCreateTable(x)
+	case *ast.CreateStreamStmt:
+		err = e.executeCreateStream(x)
 	case *ast.CreateIndexStmt:
 		err = e.executeCreateIndex(x)
 	case *ast.DropDatabaseStmt:
@@ -150,6 +152,11 @@ func (e *DDLExec) executeCreateDatabase(s *ast.CreateDatabaseStmt) error {
 
 func (e *DDLExec) executeCreateTable(s *ast.CreateTableStmt) error {
 	err := domain.GetDomain(e.ctx).DDL().CreateTable(e.ctx, s)
+	return errors.Trace(err)
+}
+
+func (e *DDLExec) executeCreateStream(s *ast.CreateStreamStmt) error {
+	err := domain.GetDomain(e.ctx).DDL().CreateStream(e.ctx, s)
 	return errors.Trace(err)
 }
 

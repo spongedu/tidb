@@ -47,6 +47,8 @@ type preprocessor struct {
 	// inCreateOrDropTable is true when visiting create/drop table statement.
 	inCreateOrDropTable bool
 
+	inCreateOrDropStream bool
+
 	// tableAliasInJoin is a stack that keeps the table alias names for joins.
 	// len(tableAliasInJoin) may bigger than 1 because the left/right child of join may be subquery that contains `JOIN`
 	tableAliasInJoin []map[string]interface{}
@@ -59,6 +61,9 @@ func (p *preprocessor) Enter(in ast.Node) (out ast.Node, skipChildren bool) {
 	case *ast.CreateTableStmt:
 		p.inCreateOrDropTable = true
 		p.checkCreateTableGrammar(node)
+	case *ast.CreateStreamStmt:
+		p.inCreateOrDropStream = true
+		p.checkCreateStreamGrammar(node)
 	case *ast.DropTableStmt:
 		p.inCreateOrDropTable = true
 		p.checkDropTableGrammar(node)
@@ -305,6 +310,25 @@ func (p *preprocessor) checkCreateTableGrammar(stmt *ast.CreateTableStmt) {
 		p.err = errors.New("'CREATE TABLE ... SELECT' is not implemented yet")
 		return
 	} else if len(stmt.Cols) == 0 && stmt.ReferTable == nil {
+		p.err = ddl.ErrTableMustHaveColumns
+		return
+	}
+}
+
+
+func (p *preprocessor) checkCreateStreamGrammar(stmt *ast.CreateStreamStmt) {
+	streamName := stmt.StreamName.Name.String()
+	if isIncorrectName(streamName) {
+		p.err = ddl.ErrWrongTableName.GenWithStackByArgs(streamName)
+		return
+	}
+	for _, colDef := range stmt.Cols {
+		if err := checkColumn(colDef); err != nil {
+			p.err = errors.Trace(err)
+			return
+		}
+	}
+	if len(stmt.Cols) == 0 {
 		p.err = ddl.ErrTableMustHaveColumns
 		return
 	}
@@ -585,6 +609,11 @@ func (p *preprocessor) handleTableName(tn *ast.TableName) {
 	}
 	if p.inCreateOrDropTable {
 		// The table may not exist in create table or drop table statement.
+		// Skip resolving the table to avoid error.
+		return
+	}
+	if p.inCreateOrDropStream {
+		// The stream may not exist in create table or drop table statement.
 		// Skip resolving the table to avoid error.
 		return
 	}

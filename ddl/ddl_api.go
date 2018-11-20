@@ -990,6 +990,69 @@ func (d *ddl) CreateTable(ctx sessionctx.Context, s *ast.CreateTableStmt) (err e
 	return errors.Trace(err)
 }
 
+
+func (d *ddl) CreateStream(ctx sessionctx.Context, s *ast.CreateStreamStmt) (err error) {
+	ident := ast.Ident{Schema: s.StreamName.Schema, Name: s.StreamName.Name}
+	colDefs := s.Cols
+	is := d.GetInformationSchema(ctx)
+	schema, ok := is.SchemaByName(ident.Schema)
+	if !ok {
+		return infoschema.ErrDatabaseNotExists.GenWithStackByArgs(ident.Schema)
+	}
+	if is.TableExists(ident.Schema, ident.Name) {
+		return infoschema.ErrTableExists.GenWithStackByArgs(ident)
+	}
+	if err = checkTooLongTable(ident.Name); err != nil {
+		return errors.Trace(err)
+	}
+	if err = checkDuplicateColumn(colDefs); err != nil {
+		return errors.Trace(err)
+	}
+	if err = checkGeneratedColumn(colDefs); err != nil {
+		return errors.Trace(err)
+	}
+	if err = checkTooLongColumn(colDefs); err != nil {
+		return errors.Trace(err)
+	}
+	if err = checkTooManyColumns(colDefs); err != nil {
+		return errors.Trace(err)
+	}
+
+	if err = checkColumnsAttributes(colDefs); err != nil {
+		return errors.Trace(err)
+	}
+
+	cols, newConstraints, err := buildColumnsAndConstraints(ctx, colDefs, []*ast.Constraint{})
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	tbInfo, err := buildTableInfo(ctx, d, ident.Name, cols, newConstraints)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	job := &model.Job{
+		SchemaID:   schema.ID,
+		TableID:    tbInfo.ID,
+		Type:       model.ActionCreateStream,
+		BinlogInfo: &model.HistoryInfo{},
+		Args:       []interface{}{tbInfo},
+	}
+
+	err = d.doDDLJob(ctx, job)
+	if err == nil {
+		if tbInfo.AutoIncID > 1 {
+			// Default tableAutoIncID base is 0.
+			// If the first ID is expected to greater than 1, we need to do rebase.
+			err = d.handleAutoIncID(tbInfo, schema.ID)
+		}
+	}
+
+	err = d.callHookOnChanged(err)
+	return errors.Trace(err)
+}
+
 func checkCharsetAndCollation(cs string, co string) error {
 	if !charset.ValidCharsetAndCollation(cs, co) {
 		return ErrUnknownCharacterSet.GenWithStackByArgs(cs)
