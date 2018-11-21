@@ -271,8 +271,12 @@ github.com/spaolacci/murmur3 v0.0.0-20180118202830-f09979ecbc72 h1:qLC7fQah7D6K1
 github.com/spaolacci/murmur3 v0.0.0-20180118202830-f09979ecbc72/go.mod h1:JwIasOWyU6f++ZhiEuf87xNszmSA2myDM2Kzu9HwQUA=
 github.com/spf13/cobra v0.0.2/go.mod h1:1l0Ry5zgKvJasoi3XT1TypsSe7PqH0Sj9dhYf7v3XqQ=
 github.com/spf13/pflag v1.0.1/go.mod h1:DYY7MBk1bdzusC3SYhjObp+wFpr4gzcvqqNjLnInEg4=
+github.com/spongedu/parser v0.0.0-20181102150703-0294367261e2 h1:FfNM0blvy5go/eyc04Mz2NziuPgIW6k4X/dzuSfmDQY=
+github.com/spongedu/parser v0.0.0-20181102150703-0294367261e2/go.mod h1:pt5ToBPRXvy7eNveA9VEwpNj5AQiVGE4GaPxBeAmeUo=
 github.com/spongedu/parser v0.0.0-20181102150703-05d67ec39b67 h1:Yb88YfrMzIZWbXiuCvjCNc7lcV2HcWd+1KuNPspaOpQ=
 github.com/spongedu/parser v0.0.0-20181102150703-05d67ec39b67/go.mod h1:pt5ToBPRXvy7eNveA9VEwpNj5AQiVGE4GaPxBeAmeUo=
+github.com/spongedu/parser v0.0.0-20181102150703-2ae733bc2c81 h1:rs+sXF/OicOiX//QfVIVDfBvsB5MzcE0coyHDWTHvmw=
+github.com/spongedu/parser v0.0.0-20181102150703-2ae733bc2c81/go.mod h1:pt5ToBPRXvy7eNveA9VEwpNj5AQiVGE4GaPxBeAmeUo=
 github.com/spongedu/parser v0.0.0-20181102150703-49de304a02d2 h1:heSxtvuujf5VAXGTVEZ2i66MRN9S80gsbiezZ0nwSW0=
 github.com/spongedu/parser v0.0.0-20181102150703-49de304a02d2/go.mod h1:pt5ToBPRXvy7eNveA9VEwpNj5AQiVGE4GaPxBeAmeUo=
 github.com/spongedu/parser v0.0.0-20181102150703-4acd198f5092 h1:k7LQeI7t82s95X2sGBHwYsRgggv54bvrBwDZROX7B88=
@@ -295,6 +299,8 @@ github.com/spongedu/parser v0.0.0-20181102150703-d886349766ca h1:bzeqxQTOOIcdt0D
 github.com/spongedu/parser v0.0.0-20181102150703-d886349766ca/go.mod h1:pt5ToBPRXvy7eNveA9VEwpNj5AQiVGE4GaPxBeAmeUo=
 github.com/spongedu/parser v0.0.0-20181102150703-de5cc9c62ddd h1:a8hYZLGa+iieymyk+T1FcXTQbV/1et2SH+AY6Bh6X1Q=
 github.com/spongedu/parser v0.0.0-20181102150703-de5cc9c62ddd/go.mod h1:pt5ToBPRXvy7eNveA9VEwpNj5AQiVGE4GaPxBeAmeUo=
+github.com/spongedu/parser v0.0.0-20181102150703-ea3844b74e23 h1:dNw9wHbjZaXH/GbaeAB9GvZI+ejvXmLsAi2REBHzT/k=
+github.com/spongedu/parser v0.0.0-20181102150703-ea3844b74e23/go.mod h1:pt5ToBPRXvy7eNveA9VEwpNj5AQiVGE4GaPxBeAmeUo=
 github.com/spongedu/parser v0.0.0-20181102150703-ebb2b28e1741 h1:lJD9/eV3Pg46hVHFBL5m+6v0kPHoA3UhsXJXB1j/2L8=
 github.com/spongedu/parser v0.0.0-20181102150703-ebb2b28e1741/go.mod h1:pt5ToBPRXvy7eNveA9VEwpNj5AQiVGE4GaPxBeAmeUo=
 github.com/spongedu/parser v0.0.0-20181102150703-fccd58e19b83 h1:odFNZsTMlGZMknqZaxPs+TvTFr2GVR1FooaUaarywec=
@@ -327,6 +333,12 @@ github.com/spongedu/parser v0.0.0-20181121081809-de5cc9c62ddd h1:pwarq1dimRfXFfT
 github.com/spongedu/parser v0.0.0-20181121081809-de5cc9c62ddd/go.mod h1:pt5ToBPRXvy7eNveA9VEwpNj5AQiVGE4GaPxBeAmeUo=
 github.com/spongedu/parser v0.0.0-20181121083255-6b6427a2156a h1:0p7OBbX/wm0ro6PZ0Vc7Ofsz2gET/ECgKNHdKqoR5y0=
 github.com/spongedu/parser v0.0.0-20181121083255-6b6427a2156a/go.mod h1:pt5ToBPRXvy7eNveA9VEwpNj5AQiVGE4GaPxBeAmeUo=
+github.com/spongedu/parser v0.0.0-20181121093210-2ae733bc2c81 h1:I4OAx9MdRcjNpJiixp7Vo/3XGw70eokcKUDlJN95YDM=
+github.com/spongedu/parser v0.0.0-20181121093210-2ae733bc2c81/go.mod h1:pt5ToBPRXvy7eNveA9VEwpNj5AQiVGE4GaPxBeAmeUo=
+github.com/spongedu/parser v0.0.0-20181121095307-ea3844b74e23 h1:SrnDUczvo2oym+NwtkIkGfVuPI3acRKou9nkHMoiFts=
+github.com/spongedu/parser v0.0.0-20181121095307-ea3844b74e23/go.mod h1:pt5ToBPRXvy7eNveA9VEwpNj5AQiVGE4GaPxBeAmeUo=
+github.com/spongedu/parser v0.0.0-20181121095614-0294367261e2 h1:X2HDHsO5s7kRi14CZ4ZGcRpcPsy3CQ1gqTMfvuO0LSY=
+github.com/spongedu/parser v0.0.0-20181121095614-0294367261e2/go.mod h1:pt5ToBPRXvy7eNveA9VEwpNj5AQiVGE4GaPxBeAmeUo=
 github.com/stretchr/objx v0.1.1/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/testify v1.2.2 h1:bSDNvY7ZPG5RlJ8otE/7V6gMiyenm9RtJ7IUVIAoJ1w=
 github.com/stretchr/testify v1.2.2/go.mod h1:a8OnRcib4nhh0OaRAV+Yts87kKdq0PP7pXfy6kDkUVs=

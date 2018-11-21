@@ -40,7 +40,7 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20170806203942-52369c62f446 // indirect
 	github.com/sirupsen/logrus v1.2.0
 	github.com/spaolacci/murmur3 v0.0.0-20180118202830-f09979ecbc72
-	github.com/spongedu/parser v0.0.0-20181121083255-6b6427a2156a // indirect
+	github.com/spongedu/parser v0.0.0-20181121095614-0294367261e2 // indirect
 	github.com/twinj/uuid v1.0.0
 	github.com/uber/jaeger-client-go v2.15.0+incompatible
 	github.com/uber/jaeger-lib v1.5.0 // indirect
@@ -50,4 +50,4 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )
 
-replace github.com/pingcap/parser => github.com/spongedu/parser v0.0.0-20181102150703-6b6427a2156a
+replace github.com/pingcap/parser => github.com/spongedu/parser v0.0.0-20181102150703-0294367261e2
