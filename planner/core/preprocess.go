@@ -61,12 +61,15 @@ func (p *preprocessor) Enter(in ast.Node) (out ast.Node, skipChildren bool) {
 	case *ast.CreateTableStmt:
 		p.inCreateOrDropTable = true
 		p.checkCreateTableGrammar(node)
-	case *ast.CreateStreamStmt:
-		p.inCreateOrDropStream = true
-		p.checkCreateStreamGrammar(node)
 	case *ast.DropTableStmt:
 		p.inCreateOrDropTable = true
 		p.checkDropTableGrammar(node)
+	case *ast.CreateStreamStmt:
+		p.inCreateOrDropStream = true
+		p.checkCreateStreamGrammar(node)
+	case *ast.DropStreamStmt:
+		p.inCreateOrDropStream = true
+		p.checkDropStreamGrammar(node)
 	case *ast.RenameTableStmt:
 		p.inCreateOrDropTable = true
 		p.checkRenameTableGrammar(node)
@@ -340,6 +343,14 @@ func (p *preprocessor) checkDropTableGrammar(stmt *ast.DropTableStmt) {
 			p.err = ddl.ErrWrongTableName.GenWithStackByArgs(t.Name.String())
 			return
 		}
+	}
+}
+
+
+func (p *preprocessor) checkDropStreamGrammar(stmt *ast.DropStreamStmt) {
+	if isIncorrectName(stmt.StreamName.Name.String()) {
+		p.err = ddl.ErrWrongTableName.GenWithStackByArgs(stmt.StreamName.Name.String())
+		return
 	}
 }
 

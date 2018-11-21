@@ -136,7 +136,64 @@ func onDropTable(t *meta.Meta, job *model.Job) (ver int64, _ error) {
 	}
 
 	// Check the table.
-	if tblInfo == nil {
+	if tblInfo == nil || tblInfo.IsStream == true {
+		job.State = model.JobStateCancelled
+		return ver, errors.Trace(infoschema.ErrTableNotExists.GenWithStackByArgs(
+			fmt.Sprintf("(Schema ID %d)", schemaID),
+			fmt.Sprintf("(Table ID %d)", tableID),
+		))
+	}
+
+	originalState := job.SchemaState
+	switch tblInfo.State {
+	case model.StatePublic:
+		// public -> write only
+		job.SchemaState = model.StateWriteOnly
+		tblInfo.State = model.StateWriteOnly
+		ver, err = updateVersionAndTableInfo(t, job, tblInfo, originalState != tblInfo.State)
+	case model.StateWriteOnly:
+		// write only -> delete only
+		job.SchemaState = model.StateDeleteOnly
+		tblInfo.State = model.StateDeleteOnly
+		ver, err = updateVersionAndTableInfo(t, job, tblInfo, originalState != tblInfo.State)
+	case model.StateDeleteOnly:
+		tblInfo.State = model.StateNone
+		ver, err = updateVersionAndTableInfo(t, job, tblInfo, originalState != tblInfo.State)
+		if err != nil {
+			return ver, errors.Trace(err)
+		}
+		if err = t.DropTable(job.SchemaID, tableID, true); err != nil {
+			break
+		}
+		// Finish this job.
+		job.FinishTableJob(model.JobStateDone, model.StateNone, ver, tblInfo)
+		startKey := tablecodec.EncodeTablePrefix(tableID)
+		job.Args = append(job.Args, startKey, getPartitionIDs(tblInfo))
+	default:
+		err = ErrInvalidTableState.GenWithStack("invalid table state %v", tblInfo.State)
+	}
+
+	return ver, errors.Trace(err)
+}
+
+func onDropStream(t *meta.Meta, job *model.Job) (ver int64, _ error) {
+	schemaID := job.SchemaID
+	tableID := job.TableID
+
+	// Check this table's database.
+	tblInfo, err := t.GetTable(schemaID, tableID)
+	if err != nil {
+		if meta.ErrDBNotExists.Equal(err) {
+			job.State = model.JobStateCancelled
+			return ver, errors.Trace(infoschema.ErrDatabaseNotExists.GenWithStackByArgs(
+				fmt.Sprintf("(Schema ID %d)", schemaID),
+			))
+		}
+		return ver, errors.Trace(err)
+	}
+
+	// Check the table.
+	if tblInfo == nil || tblInfo.IsStream == false {
 		job.State = model.JobStateCancelled
 		return ver, errors.Trace(infoschema.ErrTableNotExists.GenWithStackByArgs(
 			fmt.Sprintf("(Schema ID %d)", schemaID),

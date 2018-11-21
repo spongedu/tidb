@@ -512,6 +512,8 @@ func (w *worker) runDDLJob(d *ddlCtx, t *meta.Meta, job *model.Job) (ver int64, 
 		ver, err = onAddTablePartition(t, job)
 	case model.ActionCreateStream:
 		ver, err = onCreateStream(d, t, job)
+	case model.ActionDropStream:
+		ver, err = onDropStream(t, job)
 	default:
 		// Invalid job, cancel it.
 		job.State = model.JobStateCancelled
