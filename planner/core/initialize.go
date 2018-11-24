@@ -81,6 +81,8 @@ const (
 	TypeTableReader = "TableReader"
 	// TypeIndexReader is the type of IndexReader.
 	TypeIndexReader = "IndexReader"
+	// TypeStreamReader is the type of TableReader.
+	TypeStreamReader = "StreamReader"
 )
 
 // Init initializes LogicalAggregation.
@@ -360,6 +362,11 @@ func (p PhysicalTableReader) Init(ctx sessionctx.Context) *PhysicalTableReader {
 	p.basePhysicalPlan = newBasePhysicalPlan(ctx, TypeTableReader, &p)
 	p.TablePlans = flattenPushDownPlan(p.tablePlan)
 	p.schema = p.tablePlan.Schema()
+	return &p
+}
+
+func (p PhysicalStreamReader) Init(ctx sessionctx.Context) *PhysicalStreamReader {
+	p.basePhysicalPlan = newBasePhysicalPlan(ctx, TypeTableReader, &p)
 	return &p
 }
 
