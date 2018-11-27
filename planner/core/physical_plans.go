@@ -47,7 +47,13 @@ var (
 	_ PhysicalPlan = &PhysicalHashJoin{}
 	_ PhysicalPlan = &PhysicalMergeJoin{}
 	_ PhysicalPlan = &PhysicalUnionScan{}
+	_ PhysicalPlan = &PhysicalStreamReader{}
 )
+
+// PhysicalStreamReader is the table reader in tidb.
+type PhysicalStreamReader struct {
+	physicalSchemaProducer
+}
 
 // PhysicalTableReader is the table reader in tidb.
 type PhysicalTableReader struct {

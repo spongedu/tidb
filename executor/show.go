@@ -118,7 +118,9 @@ func (e *ShowExec) fetchAll() error {
 	case ast.ShowStatus:
 		return e.fetchShowStatus()
 	case ast.ShowTables:
-		return e.fetchShowTables()
+		return e.fetchShowTables(false)
+	case ast.ShowStreams:
+		return e.fetchShowTables(true)
 	case ast.ShowTableStatus:
 		return e.fetchShowTableStatus()
 	case ast.ShowTriggers:
@@ -240,7 +242,7 @@ func (e *ShowExec) fetchShowProcessList() error {
 	return nil
 }
 
-func (e *ShowExec) fetchShowTables() error {
+func (e *ShowExec) fetchShowTables(showStream bool) error {
 	if !e.is.SchemaExists(e.DBName) {
 		return errors.Errorf("Can not find DB: %s", e.DBName)
 	}
@@ -253,7 +255,15 @@ func (e *ShowExec) fetchShowTables() error {
 		if checker != nil && !checker.RequestVerification(e.DBName.O, v.Meta().Name.O, "", mysql.AllPrivMask) {
 			continue
 		}
-		tableNames = append(tableNames, v.Meta().Name.O)
+		if showStream == true {
+			if v.Meta().IsStream == true {
+				tableNames = append(tableNames, v.Meta().Name.O)
+			}
+		} else {
+			if v.Meta().IsStream == false {
+				tableNames = append(tableNames, v.Meta().Name.O)
+			}
+		}
 	}
 	sort.Strings(tableNames)
 	for _, v := range tableNames {

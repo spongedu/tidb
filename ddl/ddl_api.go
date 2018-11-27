@@ -917,6 +917,7 @@ func (d *ddl) CreateTable(ctx sessionctx.Context, s *ast.CreateTableStmt) (err e
 	}
 
 	tbInfo, err := buildTableInfo(ctx, d, ident.Name, cols, newConstraints)
+	tbInfo.IsStream = false;
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -957,6 +958,8 @@ func (d *ddl) CreateTable(ctx sessionctx.Context, s *ast.CreateTableStmt) (err e
 		tbInfo.Partition = pi
 	}
 
+	tbInfo.StreamProperties = make(map[string]string)
+
 	job := &model.Job{
 		SchemaID:   schema.ID,
 		TableID:    tbInfo.ID,
@@ -986,6 +989,76 @@ func (d *ddl) CreateTable(ctx sessionctx.Context, s *ast.CreateTableStmt) (err e
 	if infoschema.ErrTableExists.Equal(err) && s.IfNotExists {
 		return nil
 	}
+	err = d.callHookOnChanged(err)
+	return errors.Trace(err)
+}
+
+
+func (d *ddl) CreateStream(ctx sessionctx.Context, s *ast.CreateStreamStmt) (err error) {
+	ident := ast.Ident{Schema: s.StreamName.Schema, Name: s.StreamName.Name}
+	colDefs := s.Cols
+	is := d.GetInformationSchema(ctx)
+	schema, ok := is.SchemaByName(ident.Schema)
+	if !ok {
+		return infoschema.ErrDatabaseNotExists.GenWithStackByArgs(ident.Schema)
+	}
+	if is.TableExists(ident.Schema, ident.Name) {
+		return infoschema.ErrTableExists.GenWithStackByArgs(ident)
+	}
+	if err = checkTooLongTable(ident.Name); err != nil {
+		return errors.Trace(err)
+	}
+	if err = checkDuplicateColumn(colDefs); err != nil {
+		return errors.Trace(err)
+	}
+	if err = checkGeneratedColumn(colDefs); err != nil {
+		return errors.Trace(err)
+	}
+	if err = checkTooLongColumn(colDefs); err != nil {
+		return errors.Trace(err)
+	}
+	if err = checkTooManyColumns(colDefs); err != nil {
+		return errors.Trace(err)
+	}
+
+	if err = checkColumnsAttributes(colDefs); err != nil {
+		return errors.Trace(err)
+	}
+
+	cols, newConstraints, err := buildColumnsAndConstraints(ctx, colDefs, []*ast.Constraint{})
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	tbInfo, err := buildTableInfo(ctx, d, ident.Name, cols, newConstraints)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	tbInfo.IsStream = true
+	tbInfo.StreamProperties = make(map[string]string)
+
+	for _, p := range s.StreamProperties {
+		tbInfo.StreamProperties[p.K] = p.V
+	}
+
+	job := &model.Job{
+		SchemaID:   schema.ID,
+		TableID:    tbInfo.ID,
+		Type:       model.ActionCreateStream,
+		BinlogInfo: &model.HistoryInfo{},
+		Args:       []interface{}{tbInfo},
+	}
+
+	err = d.doDDLJob(ctx, job)
+	if err == nil {
+		if tbInfo.AutoIncID > 1 {
+			// Default tableAutoIncID base is 0.
+			// If the first ID is expected to greater than 1, we need to do rebase.
+			err = d.handleAutoIncID(tbInfo, schema.ID)
+		}
+	}
+
 	err = d.callHookOnChanged(err)
 	return errors.Trace(err)
 }
@@ -1857,7 +1930,7 @@ func (d *ddl) RenameIndex(ctx sessionctx.Context, ident ast.Ident, spec *ast.Alt
 	return errors.Trace(err)
 }
 
-// DropTable will proceed even if some table in the list does not exists.
+// ropTable will proceed even if some table in the list does not exists.
 func (d *ddl) DropTable(ctx sessionctx.Context, ti ast.Ident) (err error) {
 	is := d.GetInformationSchema(ctx)
 	schema, ok := is.SchemaByName(ti.Schema)
@@ -1866,7 +1939,7 @@ func (d *ddl) DropTable(ctx sessionctx.Context, ti ast.Ident) (err error) {
 	}
 
 	tb, err := is.TableByName(ti.Schema, ti.Name)
-	if err != nil {
+	if err != nil || tb.Meta().IsStream == true {
 		return errors.Trace(infoschema.ErrTableNotExists.GenWithStackByArgs(ti.Schema, ti.Name))
 	}
 
@@ -1874,6 +1947,31 @@ func (d *ddl) DropTable(ctx sessionctx.Context, ti ast.Ident) (err error) {
 		SchemaID:   schema.ID,
 		TableID:    tb.Meta().ID,
 		Type:       model.ActionDropTable,
+		BinlogInfo: &model.HistoryInfo{},
+	}
+
+	err = d.doDDLJob(ctx, job)
+	err = d.callHookOnChanged(err)
+	return errors.Trace(err)
+}
+
+// ropTable will proceed even if some table in the list does not exists.
+func (d *ddl) DropStream(ctx sessionctx.Context, ti ast.Ident) (err error) {
+	is := d.GetInformationSchema(ctx)
+	schema, ok := is.SchemaByName(ti.Schema)
+	if !ok {
+		return infoschema.ErrDatabaseNotExists.GenWithStackByArgs(ti.Schema)
+	}
+
+	tb, err := is.TableByName(ti.Schema, ti.Name)
+	if err != nil || tb.Meta().IsStream == false {
+		return errors.Trace(infoschema.ErrTableNotExists.GenWithStackByArgs(ti.Schema, ti.Name))
+	}
+
+	job := &model.Job{
+		SchemaID:   schema.ID,
+		TableID:    tb.Meta().ID,
+		Type:       model.ActionDropStream,
 		BinlogInfo: &model.HistoryInfo{},
 	}
 

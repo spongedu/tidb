@@ -204,6 +204,13 @@ func (ds *DataSource) tryToGetDualTask() (task, error) {
 // findBestTask implements the PhysicalPlan interface.
 // It will enumerate all the available indices and choose a plan with least cost.
 func (ds *DataSource) findBestTask(prop *property.PhysicalProperty) (t task, err error) {
+	if ds.tableInfo.IsStream == true {
+		sr := PhysicalStreamReader{}.Init(ds.ctx)
+		sr.SetSchema(ds.schema)
+		sr.stats = property.NewSimpleStats(10)
+		t := rootTask{p: sr}
+		return &t, nil
+	}
 	// If ds is an inner plan in an IndexJoin, the IndexJoin will generate an inner plan by itself,
 	// and set inner child prop nil, so here we do nothing.
 	if prop == nil {

@@ -1601,6 +1601,11 @@ func buildShowSchema(s *ast.ShowStmt) (schema *expression.Schema) {
 		if s.Full {
 			names = append(names, "Table_type")
 		}
+	case ast.ShowStreams:
+		names = []string{fmt.Sprintf("Streams_in_%s", s.DBName)}
+		if s.Full {
+			names = append(names, "Stream_type")
+		}
 	case ast.ShowTableStatus:
 		names = []string{"Name", "Engine", "Version", "Row_format", "Rows", "Avg_row_length",
 			"Data_length", "Max_data_length", "Index_length", "Data_free", "Auto_increment",

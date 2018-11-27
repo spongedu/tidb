@@ -164,6 +164,8 @@ func (b *executorBuilder) build(p plannercore.Plan) Executor {
 		return b.buildAnalyze(v)
 	case *plannercore.PhysicalTableReader:
 		return b.buildTableReader(v)
+	case *plannercore.PhysicalStreamReader:
+		return b.buildStreamReader(v)
 	case *plannercore.PhysicalIndexReader:
 		return b.buildIndexReader(v)
 	case *plannercore.PhysicalIndexLookUpReader:
@@ -1702,6 +1704,12 @@ func (b *executorBuilder) buildTableReader(v *plannercore.PhysicalTableReader) *
 	sctx := b.ctx.GetSessionVars().StmtCtx
 	sctx.TableIDs = append(sctx.TableIDs, ts.Table.ID)
 	return ret
+}
+
+func (b *executorBuilder) buildStreamReader(v *plannercore.PhysicalStreamReader) *StreamReaderExecutor {
+	return &StreamReaderExecutor{
+		baseExecutor:    newBaseExecutor(b.ctx, v.Schema(), v.ExplainID()),
+	}
 }
 
 func buildNoRangeIndexReader(b *executorBuilder, v *plannercore.PhysicalIndexReader) (*IndexReaderExecutor, error) {
