@@ -1098,6 +1098,27 @@ func (b *executorBuilder) buildHashAgg(v *plannercore.PhysicalHashAgg) Executor 
 		}
 	}
 
+	if v.StreamWindow != nil {
+		return &StreamWindowHashAggExec{
+			baseExecutor: e.baseExecutor,
+			prepared:     e.prepared,
+			sc:            e.sc,
+			PartialAggFuncs: e.PartialAggFuncs,
+			FinalAggFuncs:    e.FinalAggFuncs,
+			partialResultMap: e.partialResultMap,
+			groupSet:         e.groupSet,
+			groupKeys:        e.groupKeys,
+			cursor4GroupKey:  e.cursor4GroupKey,
+			GroupByItems:	e.GroupByItems,
+			groupKeyBuffer:   e.groupKeyBuffer,
+			groupValDatums:   e.groupValDatums,
+
+			defaultVal:       e.defaultVal,
+
+			childResult: e.childResult,
+		}
+	}
+
 	metrics.ExecutorCounter.WithLabelValues("HashAggExec").Inc()
 	return e
 }
