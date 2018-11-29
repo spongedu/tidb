@@ -49,6 +49,8 @@ type preprocessor struct {
 
 	inCreateOrDropStream bool
 
+	hasStreamTable bool
+
 	// tableAliasInJoin is a stack that keeps the table alias names for joins.
 	// len(tableAliasInJoin) may bigger than 1 because the left/right child of join may be subquery that contains `JOIN`
 	tableAliasInJoin []map[string]interface{}
@@ -125,12 +127,15 @@ func (p *preprocessor) Leave(in ast.Node) (out ast.Node, ok bool) {
 		}
 	case *ast.TableName:
 		p.handleTableName(x)
+	case *ast.SelectStmt:
+		if p.hasStreamTable && x.GroupBy != nil && x.StreamWindowSpec == nil {
+			p.err = errors.New("Can not execute aggregation on stream table without time window")
+		}
 	case *ast.Join:
 		if len(p.tableAliasInJoin) > 0 {
 			p.tableAliasInJoin = p.tableAliasInJoin[:len(p.tableAliasInJoin)-1]
 		}
 	}
-
 	return in, p.err == nil
 }
 
@@ -632,6 +637,9 @@ func (p *preprocessor) handleTableName(tn *ast.TableName) {
 	if err != nil {
 		p.err = errors.Trace(err)
 		return
+	}
+	if table != nil && table.Meta().IsStream == true {
+		p.hasStreamTable = true
 	}
 	tn.TableInfo = table.Meta()
 	dbInfo, _ := p.is.SchemaByName(tn.Schema)
