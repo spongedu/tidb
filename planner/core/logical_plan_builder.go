@@ -67,7 +67,7 @@ func (la *LogicalAggregation) collectGroupByColumns() {
 	}
 }
 
-func (b *PlanBuilder) buildAggregation(p LogicalPlan, aggFuncList []*ast.AggregateFuncExpr, gbyItems []expression.Expression) (LogicalPlan, map[int]int, error) {
+func (b *PlanBuilder) buildAggregation(p LogicalPlan, aggFuncList []*ast.AggregateFuncExpr, gbyItems []expression.Expression, sw *ast.StreamWindowSpec) (LogicalPlan, map[int]int, error) {
 	b.optFlag = b.optFlag | flagBuildKeyInfo
 	b.optFlag = b.optFlag | flagPushDownAgg
 	// We may apply aggregation eliminate optimization.
@@ -126,6 +126,10 @@ func (b *PlanBuilder) buildAggregation(p LogicalPlan, aggFuncList []*ast.Aggrega
 	plan4Agg.GroupByItems = gbyItems
 	plan4Agg.SetSchema(schema4Agg)
 	plan4Agg.collectGroupByColumns()
+	//TODO: Complete here
+	if sw != nil {
+		plan4Agg.AggWindow = &aggregation.AggWindowDesc{Size: sw.Size}
+	}
 	return plan4Agg, aggIndexMap, nil
 }
 
@@ -1719,7 +1723,7 @@ func (b *PlanBuilder) buildSelect(sel *ast.SelectStmt) (p LogicalPlan, err error
 	if hasAgg {
 		aggFuncs, totalMap = b.extractAggFuncs(sel.Fields.Fields)
 		var aggIndexMap map[int]int
-		p, aggIndexMap, err = b.buildAggregation(p, aggFuncs, gbyCols)
+		p, aggIndexMap, err = b.buildAggregation(p, aggFuncs, gbyCols, sel.StreamWindowSpec)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}

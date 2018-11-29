@@ -31,6 +31,11 @@ import (
 	"github.com/pingcap/tidb/types"
 )
 
+// TODO: Complete here
+type AggWindowDesc struct {
+	Size uint64
+}
+
 // AggFuncDesc describes an aggregation function signature, only used in planner.
 type AggFuncDesc struct {
 	// Name represents the aggregation function name.

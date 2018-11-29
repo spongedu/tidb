@@ -307,6 +307,7 @@ type basePhysicalAgg struct {
 
 	AggFuncs     []*aggregation.AggFuncDesc
 	GroupByItems []expression.Expression
+	StreamWindow *aggregation.AggWindowDesc
 }
 
 func (p *basePhysicalAgg) hasDistinctFunc() bool {
