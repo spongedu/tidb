@@ -14,72 +14,154 @@
 package executor
 
 import (
-
+	"github.com/cznic/mathutil"
 	"github.com/pingcap/errors"
-
-	//"github.com/pingcap/parser/model"
-	//plannercore "github.com/pingcap/tidb/planner/core"
-	//"github.com/pingcap/tidb/statistics"
-	//"github.com/pingcap/tidb/table"
+	// "github.com/pingcap/tidb/table"
+	"github.com/pingcap/parser/model"
+	"github.com/pingcap/tidb/types"
+	"github.com/pingcap/tidb/types/json"
 	"github.com/pingcap/tidb/util/chunk"
-	//"github.com/pingcap/tidb/util/ranger"
-	//tipb "github.com/pingcap/tipb/go-tipb"
+	"github.com/pingcap/tidb/util/mock"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
 
-// make sure `TableReaderExecutor` implements `Executor`.
+// make sure `StreamReaderExecutor` implements `Executor`.
 var _ Executor = &StreamReaderExecutor{}
 
-// StreamReaderExecutor sends DAG request and reads data from a stream.
+var batchFetchCnt = 10
+var maxFetchCnt = 10000
+var streamCursor = 0
+
+// StreamReaderExecutor reads data from a stream.
 type StreamReaderExecutor struct {
 	baseExecutor
+	Table   *model.TableInfo
+	Columns []*model.ColumnInfo
 
-	/*
-	table           table.Table
-	physicalTableID int64
-	keepOrder       bool
-	desc            bool
-	ranges          []*ranger.Range
-	dagPB           *tipb.DAGRequest
-	// columns are only required by union scan.
-	columns []*model.ColumnInfo
+	isInit bool
+	result *chunk.Chunk
+	cursor int
+}
 
-	// resultHandler handles the order of the result. Since (MAXInt64, MAXUint64] stores before [0, MaxInt64] physically
-	// for unsigned int.
-	resultHandler *tableResultHandler
-	streaming     bool
-	feedback      *statistics.QueryFeedback
+func (e *StreamReaderExecutor) init() error {
+	if e.isInit {
+		return nil
+	}
 
-	// corColInFilter tells whether there's correlated column in filter.
-	corColInFilter bool
-	// corColInAccess tells whether there's correlated column in access conditions.
-	corColInAccess bool
-	plans          []plannercore.PhysicalPlan
-	*/
-	rowCnt		  int
+	e.isInit = true
+	return nil
 }
 
 // Open initialzes necessary variables for using this executor.
 func (e *StreamReaderExecutor) Open(ctx context.Context) error {
+	err := e.init()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	return nil
 }
 
 // Next fills data into the chunk passed by its caller.
 func (e *StreamReaderExecutor) Next(ctx context.Context, chk *chunk.Chunk) error {
-	chk.Reset()
-	for {
-		if e.rowCnt < 10 && chk.NumRows() < e.ctx.GetSessionVars().MaxChunkSize {
-			chk.AppendInt64(0, int64(e.rowCnt))
-			e.rowCnt += 1
-		} else {
-			break
+	log.Warnf("[qiuyesuifeng]%v:%v", e.Table, e.cursor)
+
+	chk.GrowAndReset(e.maxChunkSize)
+	if e.result == nil {
+		e.result = e.newFirstChunk()
+		err := e.fetchAll()
+		if err != nil {
+			return errors.Trace(err)
+		}
+		iter := chunk.NewIterator4Chunk(e.result)
+		for colIdx := 0; colIdx < e.Schema().Len(); colIdx++ {
+			retType := e.Schema().Columns[colIdx].RetType
+			if !types.IsTypeVarchar(retType.Tp) {
+				continue
+			}
+			for row := iter.Begin(); row != iter.End(); row = iter.Next() {
+				if valLen := len(row.GetString(colIdx)); retType.Flen < valLen {
+					retType.Flen = valLen
+				}
+			}
 		}
 	}
-	return errors.Trace(nil)
+	if e.cursor >= e.result.NumRows() {
+		return nil
+	}
+	numCurBatch := mathutil.Min(chk.Capacity(), e.result.NumRows()-e.cursor)
+	chk.Append(e.result, e.cursor, e.cursor+numCurBatch)
+	e.cursor += numCurBatch
+	streamCursor += numCurBatch
+	return nil
 }
 
 // Close implements the Executor Close interface.
 func (e *StreamReaderExecutor) Close() error {
+	e.isInit = false
 	return nil
 }
 
+func (e *StreamReaderExecutor) fetchAll() error {
+	err := e.fetchMockData()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	return nil
+}
+
+func (e *StreamReaderExecutor) fetchMockData() error {
+	log.Warnf("[qiuyesuifeng][fetch mock data]%v", e.cursor)
+
+	for i := streamCursor; i < maxFetchCnt && i < streamCursor+batchFetchCnt; i++ {
+		row := []interface{}{mock.MockStreamData[i].ID, mock.MockStreamData[i].Content, mock.MockStreamData[i].CreateTime}
+		e.appendRow(e.result, row)
+	}
+
+	return nil
+}
+
+func (e *StreamReaderExecutor) appendRow(chk *chunk.Chunk, row []interface{}) {
+	for i, col := range row {
+		if col == nil {
+			chk.AppendNull(i)
+			continue
+		}
+		switch x := col.(type) {
+		case nil:
+			chk.AppendNull(i)
+		case int:
+			chk.AppendInt64(i, int64(x))
+		case int64:
+			chk.AppendInt64(i, x)
+		case uint64:
+			chk.AppendUint64(i, x)
+		case float64:
+			chk.AppendFloat64(i, x)
+		case float32:
+			chk.AppendFloat32(i, x)
+		case string:
+			chk.AppendString(i, x)
+		case []byte:
+			chk.AppendBytes(i, x)
+		case types.BinaryLiteral:
+			chk.AppendBytes(i, x)
+		case *types.MyDecimal:
+			chk.AppendMyDecimal(i, x)
+		case types.Time:
+			chk.AppendTime(i, x)
+		case json.BinaryJSON:
+			chk.AppendJSON(i, x)
+		case types.Duration:
+			chk.AppendDuration(i, x)
+		case types.Enum:
+			chk.AppendEnum(i, x)
+		case types.Set:
+			chk.AppendSet(i, x)
+		default:
+			chk.AppendNull(i)
+		}
+	}
+}

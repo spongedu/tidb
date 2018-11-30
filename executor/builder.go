@@ -1087,8 +1087,12 @@ func (b *executorBuilder) buildHashAgg(v *plannercore.PhysicalHashAgg) Executor 
 			e.FinalAggFuncs = append(e.FinalAggFuncs, finalAggFunc)
 			if partialAggDesc.Name == ast.AggFuncGroupConcat {
 				// For group_concat, finalAggFunc and partialAggFunc need shared `truncate` flag to do duplicate.
-				finalAggFunc.(interface{ SetTruncated(t *int32) }).SetTruncated(
-					partialAggFunc.(interface{ GetTruncated() *int32 }).GetTruncated(),
+				finalAggFunc.(interface {
+					SetTruncated(t *int32)
+				}).SetTruncated(
+					partialAggFunc.(interface {
+						GetTruncated() *int32
+					}).GetTruncated(),
 				)
 			}
 		}
@@ -1100,20 +1104,20 @@ func (b *executorBuilder) buildHashAgg(v *plannercore.PhysicalHashAgg) Executor 
 
 	if v.StreamWindow != nil {
 		return &StreamWindowHashAggExec{
-			baseExecutor: e.baseExecutor,
-			prepared:     e.prepared,
-			sc:            e.sc,
-			PartialAggFuncs: e.PartialAggFuncs,
+			baseExecutor:     e.baseExecutor,
+			prepared:         e.prepared,
+			sc:               e.sc,
+			PartialAggFuncs:  e.PartialAggFuncs,
 			FinalAggFuncs:    e.FinalAggFuncs,
 			partialResultMap: e.partialResultMap,
 			groupSet:         e.groupSet,
 			groupKeys:        e.groupKeys,
 			cursor4GroupKey:  e.cursor4GroupKey,
-			GroupByItems:	e.GroupByItems,
+			GroupByItems:     e.GroupByItems,
 			groupKeyBuffer:   e.groupKeyBuffer,
 			groupValDatums:   e.groupValDatums,
 
-			defaultVal:       e.defaultVal,
+			defaultVal: e.defaultVal,
 
 			childResult: e.childResult,
 		}
@@ -1729,7 +1733,9 @@ func (b *executorBuilder) buildTableReader(v *plannercore.PhysicalTableReader) *
 
 func (b *executorBuilder) buildStreamReader(v *plannercore.PhysicalStreamReader) *StreamReaderExecutor {
 	return &StreamReaderExecutor{
-		baseExecutor:    newBaseExecutor(b.ctx, v.Schema(), v.ExplainID()),
+		baseExecutor: newBaseExecutor(b.ctx, v.Schema(), v.ExplainID()),
+		Table:        v.Table,
+		Columns:      v.Columns,
 	}
 }
 

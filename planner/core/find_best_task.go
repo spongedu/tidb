@@ -205,7 +205,12 @@ func (ds *DataSource) tryToGetDualTask() (task, error) {
 // It will enumerate all the available indices and choose a plan with least cost.
 func (ds *DataSource) findBestTask(prop *property.PhysicalProperty) (t task, err error) {
 	if ds.tableInfo.IsStream == true {
-		sr := PhysicalStreamReader{}.Init(ds.ctx)
+		sr := PhysicalStreamReader{
+			Table:       ds.tableInfo,
+			Columns:     ds.Columns,
+			TableAsName: ds.TableAsName,
+			DBName:      ds.DBName,
+		}.Init(ds.ctx)
 		sr.SetSchema(ds.schema)
 		sr.stats = property.NewSimpleStats(10)
 		t := rootTask{p: sr}
