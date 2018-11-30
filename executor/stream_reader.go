@@ -16,7 +16,6 @@ package executor
 import (
 	"github.com/cznic/mathutil"
 	"github.com/pingcap/errors"
-	// "github.com/pingcap/tidb/table"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/types/json"
@@ -32,6 +31,9 @@ var _ Executor = &StreamReaderExecutor{}
 var batchFetchCnt = 10
 var maxFetchCnt = 10000
 var streamCursor = 0
+
+// streamTableMap : {type|topic|table =>pos}
+var streamTableMaps = make(map[string]int64)
 
 // StreamReaderExecutor reads data from a stream.
 type StreamReaderExecutor struct {

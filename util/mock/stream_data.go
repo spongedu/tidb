@@ -15,21 +15,30 @@ package mock
 
 import (
 	"strconv"
-	"time"
+
+	"github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb/types"
 )
 
 // Mock data for stream reader.
 var MockStreamData []Event
 
 type Event struct {
-	ID         int64  `json:"id"`
-	Content    string `json:"name"`
-	CreateTime int64  `json:"create_time"`
+	ID         int64      `json:"id"`
+	Content    string     `json:"name"`
+	CreateTime types.Time `json:"create_time"`
 }
 
 func init() {
+	t := types.CurrentTime(mysql.TypeTimestamp)
+
 	for i := 0; i < 10000; i++ {
-		evt := Event{int64(i), strconv.Itoa(i), time.Now().Unix()}
+		tt := types.Time{
+			Time: types.FromDate(t.Time.Year(), t.Time.Month(), t.Time.Day(), t.Time.Hour(), t.Time.Minute(), t.Time.Second()+i, t.Time.Microsecond()),
+			Type: mysql.TypeTimestamp,
+			Fsp:  types.DefaultFsp,
+		}
+		evt := Event{int64(i), strconv.Itoa(i), tt}
 		MockStreamData = append(MockStreamData, evt)
 	}
 }
