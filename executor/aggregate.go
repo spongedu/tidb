@@ -14,7 +14,7 @@
 package executor
 
 import (
-	//"fmt"
+	"fmt"
 	"sync"
 	"time"
 
@@ -942,14 +942,16 @@ type StreamWindowHashAggExec struct {
 
 	childResult *chunk.Chunk
 
-	batchSize int
-	totalSize int
-
 	lastIter  *chunk.Iterator4Chunk
 
 	winCol    string
 	winColIdx int
 	winSize uint64
+
+	windowStart types.Time
+	windowEnd types.Time
+	needSetWindow bool
+	init   bool
 }
 
 // Open implements the Executor Open interface.
@@ -957,15 +959,20 @@ func (e *StreamWindowHashAggExec) Open(ctx context.Context) error {
 	if err := e.baseExecutor.Open(ctx); err != nil {
 		return errors.Trace(err)
 	}
-	//for i, c := range e.schema.Columns {
-	//	fmt.Printf("i=%d\n",i)
-	//	fmt.Printf("c=%s\n",c.ColName.L)
-	//}
+	for i, c := range e.schema.Columns {
+		fmt.Printf("i=%d\n",i)
+		fmt.Printf("c=%s\n",c.ColName.L)
+		fmt.Printf("c=%p\n",c)
+	}
 	found := false
 	for i, c := range e.children[0].Schema().Columns {
+		fmt.Printf("i=%d\n",i)
+		fmt.Printf("c=%s\n",c.ColName.L)
+		fmt.Printf("c=%p\n",c)
 		if c.ColName.L == e.winCol {
 			e.winColIdx = i
 			found = true
+			break
 		}
 	}
 	if !found {
@@ -973,6 +980,9 @@ func (e *StreamWindowHashAggExec) Open(ctx context.Context) error {
 	}
 	e.reset()
 	e.childResult = e.children[0].newFirstChunk()
+	e.init = false
+	e.needSetWindow = true
+	e.lastIter = nil
 	return nil
 }
 
@@ -984,27 +994,14 @@ func (e *StreamWindowHashAggExec) reset() {
 	e.groupKeyBuffer = make([]byte, 0, 8)
 	e.groupValDatums = make([]types.Datum, 0, len(e.groupKeyBuffer))
 	e.groupKeys = nil
-
-	e.batchSize = 0
 }
 
-//TODO: Fix the logic here
 func (e *StreamWindowHashAggExec) shouldReset() bool {
-	//return e.childResult.NumRows() == 0
-	return e.batchSize == 6
+	return e.needSetWindow
 }
 
-//TODO: Fix the logic here
 func (e *StreamWindowHashAggExec) shouldStop() bool {
-	//return e.childResult.NumRows() == 0
-	return e.totalSize >= 12
-}
-
-
-//TODO: Fix the logic here
-func (e *StreamWindowHashAggExec) inc() {
-	e.totalSize += 1
-	e.batchSize += 1
+	return e.childResult.NumRows() == 0
 }
 
 // Next implements the Executor Next interface.
@@ -1015,12 +1012,13 @@ func (e *StreamWindowHashAggExec) Next(ctx context.Context, chk *chunk.Chunk) er
 	}
 	chk.Reset()
 	//TODO: Deal with error
-	if e.shouldStop() {
+	if e.shouldStop() && (e.init) {
 		return nil
 	}
 	if e.shouldReset() {
 		e.reset()
 	}
+	e.init = true
 	return errors.Trace(e.next(ctx, chk))
 }
 
@@ -1034,8 +1032,10 @@ func (e *StreamWindowHashAggExec) Close() error {
 
 func (e *StreamWindowHashAggExec) next(ctx context.Context, chk *chunk.Chunk) error {
 	// In this stage we consider all data from src as a single group.
+	//fmt.Println("XXXXXXXXXXXXXXXXX")
 	if !e.prepared {
 		err := e.execute(ctx)
+		//fmt.Println("55555")
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -1050,6 +1050,7 @@ func (e *StreamWindowHashAggExec) next(ctx context.Context, chk *chunk.Chunk) er
 		e.prepared = true
 	}
 	chk.Reset()
+	//fmt.Println("666666")
 
 	// Since we return e.maxChunkSize rows every time, so we should not traverse
 	// `groupSet` because of its randomness.
@@ -1063,9 +1064,9 @@ func (e *StreamWindowHashAggExec) next(ctx context.Context, chk *chunk.Chunk) er
 		for i, af := range e.PartialAggFuncs {
 			af.AppendFinalResult2Chunk(e.ctx, partialResults[i], chk)
 		}
-		chk.AppendInt64(2, 10)
-		chk.AppendInt64(3, 10)
-		if chk.NumRows() == e.maxChunkSize || i == e.totalSize || i == e.batchSize {
+		chk.AppendTime(len(e.schema.Columns) - 2, e.windowStart)
+		chk.AppendTime(len(e.schema.Columns) - 1, e.windowEnd)
+		if chk.NumRows() == e.maxChunkSize { //|| e.s {
 			e.cursor4GroupKey++
 			return nil
 		}
@@ -1075,9 +1076,11 @@ func (e *StreamWindowHashAggExec) next(ctx context.Context, chk *chunk.Chunk) er
 
 // execute fetches Chunks from src and update each aggregate function for each row in Chunk.
 func (e *StreamWindowHashAggExec) execute(ctx context.Context) (err error) {
+	//fmt.Println("=== StreamWindowHashAggExec.execute === ")
 	var inputIter *chunk.Iterator4Chunk
 	var row chunk.Row
 	for {
+		//fmt.Println("e.lastIter == nil = %+v", e.lastIter == nil)
 		if e.lastIter == nil {
 			inputIter = chunk.NewIterator4Chunk(e.childResult)
 			err := e.children[0].Next(ctx, e.childResult)
@@ -1093,11 +1096,23 @@ func (e *StreamWindowHashAggExec) execute(ctx context.Context) (err error) {
 			row = inputIter.Current()
 		}
 		for ;row != inputIter.End(); row = inputIter.Next() {
-			// TODO: FIX the logic here.
-			// We don't want `execute` to stop even though `e.childResult.NumRows() == 0`
-			// We want to `execute` stops when the requirements we set is achieved.
-			e.inc()
-			if e.shouldReset() || e.shouldStop() {
+			//fmt.Println("999999999")
+			tm := row.GetTime(e.winColIdx)
+			if e.needSetWindow {
+				e.windowStart = tm
+				e.windowEnd, err = e.windowStart.Add(e.ctx.GetSessionVars().StmtCtx, types.Duration{Duration:  time.Duration(int(e.winSize)) * time.Second})
+				e.needSetWindow = false
+			}
+			//fmt.Printf("win_start=%s, win_end=%s\n",e.windowStart.String(), e.windowEnd.String())
+			//fmt.Printf("tm=%s\n",tm)
+			//fmt.Printf("FFFFFF\n")
+			if tm.Compare(e.windowEnd) == 1 {
+				e.needSetWindow = true
+			}
+			//fmt.Printf("e.needSetWindow=%v\n", e.needSetWindow)
+			//fmt.Printf("e.shouldStop() =%v\n", e.shouldStop())
+			//fmt.Printf("row != inputIter.End() =%v\n", row == inputIter.End())
+			if e.needSetWindow || e.shouldStop(){
 				if row == inputIter.End() {
 					e.lastIter = nil
 				} else {
@@ -1106,14 +1121,18 @@ func (e *StreamWindowHashAggExec) execute(ctx context.Context) (err error) {
 				return nil
 			}
 			groupKey, err := e.getGroupKey(row)
+			//fmt.Println("111")
 			if err != nil {
 				return errors.Trace(err)
 			}
+			//fmt.Println("222")
 			if !e.groupSet.Exist(groupKey) {
 				e.groupSet.Insert(groupKey)
 				e.groupKeys = append(e.groupKeys, groupKey)
 			}
+			//fmt.Println("333")
 			partialResults := e.getPartialResults(groupKey)
+			//fmt.Println("444")
 			for i, af := range e.PartialAggFuncs {
 				err = af.UpdatePartialResult(e.ctx, []chunk.Row{row}, partialResults[i])
 				if err != nil {
@@ -1121,6 +1140,7 @@ func (e *StreamWindowHashAggExec) execute(ctx context.Context) (err error) {
 				}
 			}
 		}
+		e.lastIter = nil
 	}
 }
 

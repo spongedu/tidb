@@ -14,7 +14,6 @@
 package chunk
 
 import (
-	"fmt"
 	"time"
 	"unsafe"
 
@@ -220,6 +219,5 @@ func (r Row) GetDatum(colIdx int, tp *types.FieldType) types.Datum {
 
 // IsNull returns if the datum in the chunk.Row is null.
 func (r Row) IsNull(colIdx int) bool {
-	fmt.Printf("col=%d, row=%d\n", colIdx, r.idx)
 	return r.c.columns[colIdx].isNull(r.idx)
 }

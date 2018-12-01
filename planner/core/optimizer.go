@@ -14,6 +14,7 @@
 package core
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/pingcap/errors"
@@ -101,11 +102,33 @@ func DoOptimize(flag uint64, logic LogicalPlan) (PhysicalPlan, error) {
 	if !AllowCartesianProduct && existsCartesianProduct(logic) {
 		return nil, errors.Trace(ErrCartesianProductUnsupported)
 	}
+	if len(logic.Children()) > 0 && len(logic.Children()[0].Children()) > 0 {
+		for i, c := range logic.Children()[0].Children()[0].Schema().Columns {
+			fmt.Printf("i=%d\n", i)
+			fmt.Printf("c=%s\n", c.ColName.L)
+			fmt.Println("xxxxxxx")
+		}
+	}
 	physical, err := physicalOptimize(logic)
+	if len(physical.Children()) > 0 && len(physical.Children()[0].Children()) > 0 {
+		fmt.Println(physical.Children()[0].Children()[0].ExplainID())
+		for i, c := range physical.Children()[0].Children()[0].Schema().Columns {
+			fmt.Printf("i=%d\n", i)
+			fmt.Printf("c=%s\n", c.ColName.L)
+			fmt.Println("yyyyyy")
+		}
+	}
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	finalPlan := eliminatePhysicalProjection(physical)
+	if len(finalPlan.Children()) > 0 && len(finalPlan.Children()[0].Children()) > 0 {
+		for i, c := range finalPlan.Children()[0].Children()[0].Schema().Columns {
+			fmt.Printf("i=%d\n", i)
+			fmt.Printf("c=%s\n", c.ColName.L)
+			fmt.Println("zzzzzz")
+		}
+	}
 	return finalPlan, nil
 }
 

@@ -44,12 +44,12 @@ func (la *LogicalAggregation) CompleteStreamWindow() []*expression.Column {
 		winStartCol := &expression.Column{
 			ColName:  model.NewCIStr("window_start"),
 			UniqueID: la.ctx.GetSessionVars().AllocPlanColumnID(),
-			RetType: 	types.NewFieldType(mysql.TypeLong),
+			RetType: 	types.NewFieldType(mysql.TypeTimestamp),
 		}
 		winEndCol := &expression.Column{
 			ColName:  model.NewCIStr("window_end"),
 			UniqueID: la.ctx.GetSessionVars().AllocPlanColumnID(),
-			RetType: 	types.NewFieldType(mysql.TypeLong),
+			RetType: 	types.NewFieldType(mysql.TypeTimestamp),
 		}
 		x := []*expression.Column{winStartCol, winEndCol}
 		la.schema.Columns = append(la.schema.Columns, x...)

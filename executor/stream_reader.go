@@ -14,8 +14,13 @@
 package executor
 
 import (
+	//"time"
+
+	"time"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb/types"
 
 	//"github.com/pingcap/parser/model"
 	//plannercore "github.com/pingcap/tidb/planner/core"
@@ -57,19 +62,34 @@ type StreamReaderExecutor struct {
 	plans          []plannercore.PhysicalPlan
 	*/
 	rowCnt		  int
+	t            types.Time
 }
 
 // Open initialzes necessary variables for using this executor.
 func (e *StreamReaderExecutor) Open(ctx context.Context) error {
+	e.t = types.CurrentTime(mysql.TypeTimestamp)
 	return nil
 }
 
 // Next fills data into the chunk passed by its caller.
-func (e *StreamReaderExecutor) Next(ctx context.Context, chk *chunk.Chunk) error {
+func (e *StreamReaderExecutor) Next(ctx context.Context, chk *chunk.Chunk) (err error) {
 	chk.Reset()
 	for {
 		if e.rowCnt < 20 && chk.NumRows() < e.ctx.GetSessionVars().MaxChunkSize {
-			chk.AppendInt64(0, int64(e.rowCnt))
+			t := e.t
+			tt := types.Time{
+				Time: types.FromDate(t.Time.Year(), t.Time.Month(), t.Time.Day(), t.Time.Hour(), t.Time.Minute(), t.Time.Second(), t.Time.Microsecond()),
+				Type: mysql.TypeTimestamp,
+				Fsp:  types.DefaultFsp,
+			}
+			tt, err = tt.Add(e.ctx.GetSessionVars().StmtCtx, types.Duration{Duration:  time.Duration(e.rowCnt) * time.Second})
+			if err != nil {
+				return err
+			}
+			chk.AppendInt64(0, int64(e.rowCnt % 3))
+			chk.AppendTime(1, tt)
+			//time.Sleep(1 * time.Second)
+			//time.Sleep(100 * time.Millisecond)
 			e.rowCnt += 1
 		} else {
 			break

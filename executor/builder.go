@@ -1013,6 +1013,11 @@ func (b *executorBuilder) buildProjBelowAgg(aggFuncs []*aggregation.AggFuncDesc,
 		groupByItems[i] = newArg
 		cursor++
 	}
+	for i, r := range src.Schema().Columns {
+		projSchemaCols = append(projSchemaCols, r.Clone().(*expression.Column))
+		projExprs = append(projExprs, expression.Column2Exprs([]*expression.Column{r})...)
+		projExprs[len(projExprs)-1].(*expression.Column).Index = i
+	}
 
 	return &ProjectionExec{
 		baseExecutor:  newBaseExecutor(b.ctx, expression.NewSchema(projSchemaCols...), projFromID, src),
@@ -1730,6 +1735,11 @@ func (b *executorBuilder) buildTableReader(v *plannercore.PhysicalTableReader) *
 }
 
 func (b *executorBuilder) buildStreamReader(v *plannercore.PhysicalStreamReader) *StreamReaderExecutor {
+	for i, c := range v.Schema().Columns {
+		fmt.Printf("i=%d\n", i)
+		fmt.Printf("c=%s\n", c.ColName.L)
+		fmt.Println("tttt")
+	}
 	return &StreamReaderExecutor{
 		baseExecutor:    newBaseExecutor(b.ctx, v.Schema(), v.ExplainID()),
 	}
