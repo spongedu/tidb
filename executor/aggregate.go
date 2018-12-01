@@ -940,6 +940,11 @@ type StreamWindowHashAggExec struct {
 	defaultVal       *chunk.Chunk
 
 	childResult *chunk.Chunk
+
+	batchSize int
+	totalSize int
+
+	lastIter *chunk.Iterator4Chunk
 }
 
 // Open implements the Executor Open interface.
@@ -947,13 +952,40 @@ func (e *StreamWindowHashAggExec) Open(ctx context.Context) error {
 	if err := e.baseExecutor.Open(ctx); err != nil {
 		return errors.Trace(err)
 	}
+	e.reset()
+	e.childResult = e.children[0].newFirstChunk()
+	return nil
+}
+
+func (e *StreamWindowHashAggExec) reset() {
 	e.prepared = false
+	e.cursor4GroupKey = 0
 	e.groupSet = set.NewStringSet()
 	e.partialResultMap = make(aggPartialResultMapper, 0)
 	e.groupKeyBuffer = make([]byte, 0, 8)
 	e.groupValDatums = make([]types.Datum, 0, len(e.groupKeyBuffer))
-	e.childResult = e.children[0].newFirstChunk()
-	return nil
+	e.groupKeys = nil
+
+	e.batchSize = 0
+}
+
+//TODO: Fix the logic here
+func (e *StreamWindowHashAggExec) shouldReset() bool {
+	//return e.childResult.NumRows() == 0
+	return e.batchSize == 4
+}
+
+//TODO: Fix the logic here
+func (e *StreamWindowHashAggExec) shouldStop() bool {
+	//return e.childResult.NumRows() == 0
+	return e.totalSize >= 19
+}
+
+
+//TODO: Fix the logic here
+func (e *StreamWindowHashAggExec) inc() {
+	e.totalSize += 1
+	e.batchSize += 1
 }
 
 // Next implements the Executor Next interface.
@@ -963,6 +995,13 @@ func (e *StreamWindowHashAggExec) Next(ctx context.Context, chk *chunk.Chunk) er
 		defer func() { e.runtimeStats.Record(time.Now().Sub(start), chk.NumRows()) }()
 	}
 	chk.Reset()
+	//TODO: Deal with error
+	if e.shouldStop() {
+		return nil
+	}
+	if e.shouldReset() {
+		e.reset()
+	}
 	return errors.Trace(e.next(ctx, chk))
 }
 
@@ -974,7 +1013,6 @@ func (e *StreamWindowHashAggExec) Close() error {
 	return nil
 }
 
-// unparallelExec executes hash aggregation algorithm in single thread.
 func (e *StreamWindowHashAggExec) next(ctx context.Context, chk *chunk.Chunk) error {
 	// In this stage we consider all data from src as a single group.
 	if !e.prepared {
@@ -996,7 +1034,9 @@ func (e *StreamWindowHashAggExec) next(ctx context.Context, chk *chunk.Chunk) er
 
 	// Since we return e.maxChunkSize rows every time, so we should not traverse
 	// `groupSet` because of its randomness.
+	var i = 0
 	for ; e.cursor4GroupKey < len(e.groupKeys); e.cursor4GroupKey++ {
+		i++
 		partialResults := e.getPartialResults(e.groupKeys[e.cursor4GroupKey])
 		if len(e.PartialAggFuncs) == 0 {
 			chk.SetNumVirtualRows(chk.NumRows() + 1)
@@ -1004,7 +1044,7 @@ func (e *StreamWindowHashAggExec) next(ctx context.Context, chk *chunk.Chunk) er
 		for i, af := range e.PartialAggFuncs {
 			af.AppendFinalResult2Chunk(e.ctx, partialResults[i], chk)
 		}
-		if chk.NumRows() == e.maxChunkSize {
+		if chk.NumRows() == e.maxChunkSize || i == e.totalSize || i == e.batchSize {
 			e.cursor4GroupKey++
 			return nil
 		}
@@ -1014,17 +1054,36 @@ func (e *StreamWindowHashAggExec) next(ctx context.Context, chk *chunk.Chunk) er
 
 // execute fetches Chunks from src and update each aggregate function for each row in Chunk.
 func (e *StreamWindowHashAggExec) execute(ctx context.Context) (err error) {
-	inputIter := chunk.NewIterator4Chunk(e.childResult)
+	var inputIter *chunk.Iterator4Chunk
+	var row chunk.Row
 	for {
-		err := e.children[0].Next(ctx, e.childResult)
-		if err != nil {
-			return errors.Trace(err)
+		if e.lastIter == nil {
+			inputIter = chunk.NewIterator4Chunk(e.childResult)
+			err := e.children[0].Next(ctx, e.childResult)
+			if err != nil {
+				return errors.Trace(err)
+			}
+			if e.childResult.NumRows() == 0 {
+				return nil
+			}
+			row = inputIter.Begin()
+		} else {
+			inputIter = e.lastIter
+			row = inputIter.Current()
 		}
-		// no more data.
-		if e.childResult.NumRows() == 0 {
-			return nil
-		}
-		for row := inputIter.Begin(); row != inputIter.End(); row = inputIter.Next() {
+		for ;row != inputIter.End(); row = inputIter.Next() {
+			// TODO: FIX the logic here.
+			// We don't want `execute` to stop even though `e.childResult.NumRows() == 0`
+			// We want to `execute` stops when the requirements we set is achieved.
+			e.inc()
+			if e.shouldReset() || e.shouldStop() {
+				if row == inputIter.End() {
+					e.lastIter = nil
+				} else {
+					e.lastIter = inputIter
+				}
+				return nil
+			}
 			groupKey, err := e.getGroupKey(row)
 			if err != nil {
 				return errors.Trace(err)

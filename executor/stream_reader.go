@@ -68,7 +68,7 @@ func (e *StreamReaderExecutor) Open(ctx context.Context) error {
 func (e *StreamReaderExecutor) Next(ctx context.Context, chk *chunk.Chunk) error {
 	chk.Reset()
 	for {
-		if e.rowCnt < 10 && chk.NumRows() < e.ctx.GetSessionVars().MaxChunkSize {
+		if e.rowCnt < 20 && chk.NumRows() < e.ctx.GetSessionVars().MaxChunkSize {
 			chk.AppendInt64(0, int64(e.rowCnt))
 			e.rowCnt += 1
 		} else {
