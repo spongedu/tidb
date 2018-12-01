@@ -25,7 +25,7 @@ import (
 	"github.com/pingcap/tidb/types/json"
 	"github.com/pingcap/tidb/util/chunk"
 	"github.com/pingcap/tidb/util/mock"
-	log "github.com/sirupsen/logrus"
+	// log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
 
@@ -55,6 +55,8 @@ func (e *StreamReaderExecutor) setVariableName(tp string) {
 		e.variableName = variable.TiDBPulsarStreamTablePos
 	} else if tp == "log" {
 		e.variableName = variable.TiDBLogStreamTablePos
+	} else {
+		e.variableName = variable.TiDBDemoStreamTablePos
 	}
 }
 
@@ -140,19 +142,48 @@ func (e *StreamReaderExecutor) Close() error {
 }
 
 func (e *StreamReaderExecutor) fetchAll(cursor int) error {
-	err := e.fetchMockData(cursor)
-	if err != nil {
-		return errors.Trace(err)
+	tableName := e.Table.Name.L
+	if tableName == "tidb_kafka_stream_table_demo" {
+		err := e.fetchMockKafkaData(cursor)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	} else if tableName == "tidb_pulsar_stream_table_demo" {
+		err := e.fetchMockPulsarData(cursor)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	} else if tableName == "tidb_stream_table_demo" {
+		err := e.fetchMockData(cursor)
+		if err != nil {
+			return errors.Trace(err)
+		}
 	}
 
 	return nil
 }
 
 func (e *StreamReaderExecutor) fetchMockData(cursor int) error {
-	log.Warnf("[qiuyesuifeng][fetch mock data]%v", e.cursor)
-
 	for i := cursor; i < maxFetchCnt && i < cursor+batchFetchCnt; i++ {
 		row := []interface{}{mock.MockStreamData[i].ID, mock.MockStreamData[i].Content, mock.MockStreamData[i].CreateTime}
+		e.appendRow(e.result, row)
+	}
+
+	return nil
+}
+
+func (e *StreamReaderExecutor) fetchMockKafkaData(cursor int) error {
+	for i := cursor; i < maxFetchCnt && i < cursor+batchFetchCnt; i++ {
+		row := []interface{}{mock.MockKafkaStreamData[i].ID, mock.MockKafkaStreamData[i].Content, mock.MockKafkaStreamData[i].CreateTime}
+		e.appendRow(e.result, row)
+	}
+
+	return nil
+}
+
+func (e *StreamReaderExecutor) fetchMockPulsarData(cursor int) error {
+	for i := cursor; i < maxFetchCnt && i < cursor+batchFetchCnt; i++ {
+		row := []interface{}{mock.MockPulsarStreamData[i].ID, mock.MockPulsarStreamData[i].Content, mock.MockPulsarStreamData[i].CreateTime}
 		e.appendRow(e.result, row)
 	}
 

@@ -22,8 +22,13 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// Mock data for stream reader.
-var MockStreamData []Event
+// Mock data for stream reader demo.
+var (
+	MockStreamData       []Event
+	MockKafkaStreamData  []KafkaEvent
+	MockPulsarStreamData []PulsarEvent
+	MockLogStreamData    []LogEvent
+)
 
 type Event struct {
 	ID         int64      `json:"id"`
@@ -31,18 +36,66 @@ type Event struct {
 	CreateTime types.Time `json:"create_time"`
 }
 
+type KafkaEvent struct {
+	ID         int64      `json:"id"`
+	Content    string     `json:"content"`
+	CreateTime types.Time `json:"create_time"`
+}
+
+type PulsarEvent struct {
+	ID         int64      `json:"id"`
+	Content    string     `json:"content"`
+	CreateTime types.Time `json:"create_time"`
+}
+
+type LogEvent struct {
+	ID         int64      `json:"id"`
+	Content    string     `json:"content"`
+	CreateTime types.Time `json:"create_time"`
+}
+
+func genData(i int, t types.Time) Event {
+	tt := types.Time{
+		Time: types.FromDate(t.Time.Year(), t.Time.Month(), t.Time.Day(), t.Time.Hour(), t.Time.Minute(), t.Time.Second()+i, t.Time.Microsecond()),
+		Type: mysql.TypeTimestamp,
+		Fsp:  types.DefaultFsp,
+	}
+	content := fmt.Sprintf("TiDB Stream Demo Data %d", i)
+	evt := Event{int64(i), content, tt}
+
+	return evt
+}
+
+func genKafkaData(i int, t types.Time) KafkaEvent {
+	tt := types.Time{
+		Time: types.FromDate(t.Time.Year(), t.Time.Month(), t.Time.Day(), t.Time.Hour(), t.Time.Minute(), t.Time.Second()+i, t.Time.Microsecond()),
+		Type: mysql.TypeTimestamp,
+		Fsp:  types.DefaultFsp,
+	}
+	content := fmt.Sprintf("TiDB Stream Demo Data %d", i)
+	evt := KafkaEvent{int64(i), content, tt}
+
+	return evt
+}
+
+func genPulsarData(i int, t types.Time) PulsarEvent {
+	evt := PulsarEvent{}
+	return evt
+}
+
+func genLogData(i int, t types.Time) LogEvent {
+	evt := LogEvent{}
+	return evt
+}
+
 func init() {
 	t := types.CurrentTime(mysql.TypeTimestamp)
 
-	for i := 0; i < 10000; i++ {
-		tt := types.Time{
-			Time: types.FromDate(t.Time.Year(), t.Time.Month(), t.Time.Day(), t.Time.Hour(), t.Time.Minute(), t.Time.Second()+i, t.Time.Microsecond()),
-			Type: mysql.TypeTimestamp,
-			Fsp:  types.DefaultFsp,
-		}
-		content := fmt.Sprintf("TiDB Stream Test Data %d", i)
-		evt := Event{int64(i), content, tt}
-		MockStreamData = append(MockStreamData, evt)
+	for i := 0; i < 100; i++ {
+		MockStreamData = append(MockStreamData, genData(i, t))
+		MockKafkaStreamData = append(MockKafkaStreamData, genKafkaData(i, t))
+		MockPulsarStreamData = append(MockPulsarStreamData, genPulsarData(i, t))
+		MockLogStreamData = append(MockLogStreamData, genLogData(i, t))
 	}
 
 	for i := 0; i < 10; i++ {
@@ -59,5 +112,9 @@ func init() {
 
 		MockStreamData[i] = evt
 		log.Errorf("[mock stream data]%v-%s", MockStreamData[i], string(data))
+
+		log.Errorf("[mock stream kafka data]%v", MockKafkaStreamData[i])
+		log.Errorf("[mock stream pulsar data]%v", MockPulsarStreamData[i])
+		log.Errorf("[mock stream log data]%v", MockLogStreamData[i])
 	}
 }
