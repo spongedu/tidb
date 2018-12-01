@@ -14,9 +14,13 @@
 package executor
 
 import (
+	"strconv"
+	"strings"
+
 	"github.com/cznic/mathutil"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/model"
+	"github.com/pingcap/tidb/sessionctx/variable"
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/types/json"
 	"github.com/pingcap/tidb/util/chunk"
@@ -30,10 +34,6 @@ var _ Executor = &StreamReaderExecutor{}
 
 var batchFetchCnt = 10
 var maxFetchCnt = 10000
-var streamCursor = 0
-
-// streamTableMap : {type|topic|table =>pos}
-var streamTableMaps = make(map[string]int64)
 
 // StreamReaderExecutor reads data from a stream.
 type StreamReaderExecutor struct {
@@ -41,25 +41,44 @@ type StreamReaderExecutor struct {
 	Table   *model.TableInfo
 	Columns []*model.ColumnInfo
 
-	isInit bool
 	result *chunk.Chunk
 	cursor int
+	pos    int
+
+	variableName string
 }
 
-func (e *StreamReaderExecutor) init() error {
-	if e.isInit {
-		return nil
+func (e *StreamReaderExecutor) setVariableName(tp string) {
+	if tp == "kafka" {
+		e.variableName = variable.TiDBKafkaStreamTablePos
+	} else if tp == "pulsar" {
+		e.variableName = variable.TiDBPulsarStreamTablePos
+	} else if tp == "log" {
+		e.variableName = variable.TiDBLogStreamTablePos
 	}
-
-	e.isInit = true
-	return nil
 }
 
 // Open initialzes necessary variables for using this executor.
 func (e *StreamReaderExecutor) Open(ctx context.Context) error {
-	err := e.init()
-	if err != nil {
-		return errors.Trace(err)
+	tp, ok := e.Table.StreamProperties["type"]
+	if !ok {
+		return errors.New("Cannot find stream table type")
+	}
+
+	e.setVariableName(strings.ToLower(tp))
+
+	var err error
+	value, _ := e.ctx.GetSessionVars().GlobalVarsAccessor.GetGlobalSysVar(e.variableName)
+	if value != "" {
+		e.pos, err = strconv.Atoi(value)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	} else {
+		err = e.ctx.GetSessionVars().GlobalVarsAccessor.SetGlobalSysVar(e.variableName, "0")
+		if err != nil {
+			return errors.Trace(err)
+		}
 	}
 
 	return nil
@@ -67,12 +86,21 @@ func (e *StreamReaderExecutor) Open(ctx context.Context) error {
 
 // Next fills data into the chunk passed by its caller.
 func (e *StreamReaderExecutor) Next(ctx context.Context, chk *chunk.Chunk) error {
-	log.Warnf("[qiuyesuifeng]%v:%v", e.Table, e.cursor)
+	value, err := e.ctx.GetSessionVars().GlobalVarsAccessor.GetGlobalSysVar(e.variableName)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	e.pos, err = strconv.Atoi(value)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	log.Warnf("[qiuyesuifeng]%v:%v:%v", e.Table, e.cursor, e.pos)
 
 	chk.GrowAndReset(e.maxChunkSize)
 	if e.result == nil {
 		e.result = e.newFirstChunk()
-		err := e.fetchAll()
+		err = e.fetchAll(e.pos)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -95,18 +123,9 @@ func (e *StreamReaderExecutor) Next(ctx context.Context, chk *chunk.Chunk) error
 	numCurBatch := mathutil.Min(chk.Capacity(), e.result.NumRows()-e.cursor)
 	chk.Append(e.result, e.cursor, e.cursor+numCurBatch)
 	e.cursor += numCurBatch
-	streamCursor += numCurBatch
-	return nil
-}
 
-// Close implements the Executor Close interface.
-func (e *StreamReaderExecutor) Close() error {
-	e.isInit = false
-	return nil
-}
-
-func (e *StreamReaderExecutor) fetchAll() error {
-	err := e.fetchMockData()
+	e.pos += numCurBatch
+	err = e.ctx.GetSessionVars().GlobalVarsAccessor.SetGlobalSysVar(e.variableName, strconv.Itoa(e.pos))
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -114,10 +133,24 @@ func (e *StreamReaderExecutor) fetchAll() error {
 	return nil
 }
 
-func (e *StreamReaderExecutor) fetchMockData() error {
+// Close implements the Executor Close interface.
+func (e *StreamReaderExecutor) Close() error {
+	return nil
+}
+
+func (e *StreamReaderExecutor) fetchAll(cursor int) error {
+	err := e.fetchMockData(cursor)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	return nil
+}
+
+func (e *StreamReaderExecutor) fetchMockData(cursor int) error {
 	log.Warnf("[qiuyesuifeng][fetch mock data]%v", e.cursor)
 
-	for i := streamCursor; i < maxFetchCnt && i < streamCursor+batchFetchCnt; i++ {
+	for i := cursor; i < maxFetchCnt && i < cursor+batchFetchCnt; i++ {
 		row := []interface{}{mock.MockStreamData[i].ID, mock.MockStreamData[i].Content, mock.MockStreamData[i].CreateTime}
 		e.appendRow(e.result, row)
 	}

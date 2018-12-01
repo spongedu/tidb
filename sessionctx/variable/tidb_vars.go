@@ -215,6 +215,16 @@ const (
 	// tidb_constraint_check_in_place indicates to check the constraint when the SQL executing.
 	// It could hurt the performance of bulking insert when it is ON.
 	TiDBConstraintCheckInPlace = "tidb_constraint_check_in_place"
+
+	// Hack for stream table demo
+	// tidb kafka stream table pos
+	TiDBKafkaStreamTablePos = "tidb_kafka_stream_table_pos"
+
+	// tidb pulsar stream table pos
+	TiDBPulsarStreamTablePos = "tidb_pulsar_stream_table_pos"
+
+	// tidb log stream table pos
+	TiDBLogStreamTablePos = "tidb_log_stream_table_pos"
 )
 
 // Default TiDB system variable values.
