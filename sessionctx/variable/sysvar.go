@@ -670,6 +670,12 @@ var defaultSysVars = []*SysVar{
 	{ScopeSession, TiDBDDLReorgPriority, "PRIORITY_LOW"},
 	{ScopeSession, TiDBForcePriority, mysql.Priority2Str[DefTiDBForcePriority]},
 	{ScopeSession, TiDBEnableRadixJoin, boolToIntStr(DefTiDBUseRadixJoin)},
+
+	// Stream Table Variable
+	{ScopeGlobal | ScopeSession, TiDBKafkaStreamTablePos, "0"},
+	{ScopeGlobal | ScopeSession, TiDBPulsarStreamTablePos, "0"},
+	{ScopeGlobal | ScopeSession, TiDBLogStreamTablePos, "0"},
+	{ScopeGlobal | ScopeSession, TiDBStreamTableDemoPos, "0"},
 }
 
 // SynonymsSysVariables is synonyms of system variables.

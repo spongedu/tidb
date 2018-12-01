@@ -125,7 +125,7 @@ func checkStreamType(args map[string]string) error {
 	}
 
 	tp := strings.ToLower(key)
-	if tp != "kafka" && tp != "pulsar" && tp != "binlog" && tp != "log" {
+	if tp != "kafka" && tp != "pulsar" && tp != "binlog" && tp != "log" && tp != "demo" {
 		return errors.New("Invalid stream table type")
 	}
 
