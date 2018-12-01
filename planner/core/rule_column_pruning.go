@@ -110,6 +110,9 @@ func (la *LogicalAggregation) PruneColumns(parentUsedCols []*expression.Column) 
 			la.GroupByItems = []expression.Expression{expression.One}
 		}
 	}
+	if la.AggWindow != nil {
+		return
+	}
 	child.PruneColumns(selfUsedCols)
 }
 
