@@ -134,6 +134,8 @@ type PlanBuilder struct {
 	// inStraightJoin represents whether the current "SELECT" statement has
 	// "STRAIGHT_JOIN" option.
 	inStraightJoin bool
+
+	streamColName string
 }
 
 // GetVisitInfo gets the visitInfo of the PlanBuilder.

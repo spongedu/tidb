@@ -125,7 +125,12 @@ func (b *PlanBuilder) buildAggregation(p LogicalPlan, aggFuncList []*ast.Aggrega
 	}
 	//TODO: Complete here
 	if sw != nil {
-		plan4Agg.AggWindow = &aggregation.AggWindowDesc{Size: sw.Size, WinColName: sw.WinCol}
+		if len(sw.WinCol) != 0 {
+			plan4Agg.AggWindow = &aggregation.AggWindowDesc{Size: sw.Size, WinColName: sw.WinCol}
+		} else {
+			plan4Agg.AggWindow = &aggregation.AggWindowDesc{Size: sw.Size, WinColName: b.streamColName}
+		}
+		//plan4Agg.AggWindow = &aggregation.AggWindowDesc{Size: sw.Size, WinColName: sw.WinCol}
 	//	winStartCol := &expression.Column{
 	//		ColName:  model.NewCIStr("window_start"),
 	//		UniqueID: plan4Agg.ctx.GetSessionVars().AllocPlanColumnID(),
@@ -1858,6 +1863,14 @@ func (b *PlanBuilder) buildDataSource(tn *ast.TableName) (LogicalPlan, error) {
 	}
 
 	tableInfo := tbl.Meta()
+	//TODO: Fix This
+	if tableInfo.IsStream {
+		for _, c := range tableInfo.Columns {
+			if c.Tp == mysql.TypeTimestamp {
+				b.streamColName = c.Name.L
+			}
+		}
+	}
 	b.visitInfo = appendVisitInfo(b.visitInfo, mysql.SelectPriv, dbName.L, tableInfo.Name.L, "")
 
 	if tableInfo.GetPartitionInfo() != nil {
