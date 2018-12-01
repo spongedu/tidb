@@ -50,9 +50,14 @@ var (
 	_ PhysicalPlan = &PhysicalStreamReader{}
 )
 
-// PhysicalStreamReader is the table reader in tidb.
+// PhysicalStreamReader is the stream reader in tidb.
 type PhysicalStreamReader struct {
 	physicalSchemaProducer
+
+	Table       *model.TableInfo
+	Columns     []*model.ColumnInfo
+	TableAsName *model.CIStr
+	DBName      model.CIStr
 }
 
 // PhysicalTableReader is the table reader in tidb.

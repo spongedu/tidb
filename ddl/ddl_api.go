@@ -118,6 +118,44 @@ func checkTooLongIndex(index model.CIStr) error {
 	return nil
 }
 
+func checkStreamType(args map[string]string) error {
+	key, ok := args["type"]
+	if !ok {
+		return errors.New("Cannot find stream table type")
+	}
+
+	tp := strings.ToLower(key)
+	if tp != "kafka" && tp != "pulsar" && tp != "binlog" && tp != "log" && tp != "demo" {
+		return errors.New("Invalid stream table type")
+	}
+
+	if tp == "kafka" {
+		_, ok := args["topic"]
+		if !ok {
+			return errors.New("Cannot find kafka stream table topic")
+		}
+	}
+
+	if tp == "pulsar" {
+		_, ok := args["topic"]
+		if !ok {
+			return errors.New("Cannot find pulsar stream table topic")
+		}
+	}
+
+	return nil
+}
+
+func checkStreamTimestampField(cols []*model.ColumnInfo) error {
+	for _, col := range cols {
+		if col.Tp == mysql.TypeTimestamp {
+			return nil
+		}
+	}
+
+	return errors.New("Cannot find stream table timestamp type")
+}
+
 func setColumnFlagWithConstraint(colMap map[string]*table.Column, v *ast.Constraint) {
 	switch v.Tp {
 	case ast.ConstraintPrimaryKey:
@@ -917,7 +955,7 @@ func (d *ddl) CreateTable(ctx sessionctx.Context, s *ast.CreateTableStmt) (err e
 	}
 
 	tbInfo, err := buildTableInfo(ctx, d, ident.Name, cols, newConstraints)
-	tbInfo.IsStream = false;
+	tbInfo.IsStream = false
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -993,7 +1031,6 @@ func (d *ddl) CreateTable(ctx sessionctx.Context, s *ast.CreateTableStmt) (err e
 	return errors.Trace(err)
 }
 
-
 func (d *ddl) CreateStream(ctx sessionctx.Context, s *ast.CreateStreamStmt) (err error) {
 	ident := ast.Ident{Schema: s.StreamName.Schema, Name: s.StreamName.Name}
 	colDefs := s.Cols
@@ -1040,6 +1077,16 @@ func (d *ddl) CreateStream(ctx sessionctx.Context, s *ast.CreateStreamStmt) (err
 
 	for _, p := range s.StreamProperties {
 		tbInfo.StreamProperties[p.K] = p.V
+	}
+
+	err = checkStreamType(tbInfo.StreamProperties)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	err = checkStreamTimestampField(tbInfo.Columns)
+	if err != nil {
+		return errors.Trace(err)
 	}
 
 	job := &model.Job{

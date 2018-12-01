@@ -186,6 +186,29 @@ type Time struct {
 	Fsp int
 }
 
+// Add user-defined time json unmarshal method
+func (t *Time) UnmarshalJSON(data []byte) (err error) {
+	tt, err := gotime.ParseInLocation(`"`+TimeFormat+`"`, string(data), gotime.Local)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	t.Time.year = uint16(tt.Year())
+	t.Time.month = uint8(tt.Month())
+	t.Time.day = uint8(tt.Day())
+	t.Time.hour = int(tt.Hour())
+	t.Time.minute = uint8(tt.Minute())
+	t.Time.second = uint8(tt.Second())
+	return nil
+}
+
+// Add user-defined time json marshal method
+func (t Time) MarshalJSON() ([]byte, error) {
+	d := fmt.Sprintf(`"%04d-%02d-%02d %02d:%02d:%02d"`, t.Time.Year(), t.Time.Month(), t.Time.Day(),
+		t.Time.Hour(), t.Time.Minute(), t.Time.Second())
+	return []byte(d), nil
+}
+
 // MaxMySQLTime returns Time with maximum mysql time type.
 func MaxMySQLTime(fsp int) Time {
 	return Time{Time: FromDate(0, 0, 0, TimeMaxHour, TimeMaxMinute, TimeMaxSecond, 0), Type: mysql.TypeDuration, Fsp: fsp}

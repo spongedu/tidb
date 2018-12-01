@@ -81,7 +81,7 @@ const (
 	TypeTableReader = "TableReader"
 	// TypeIndexReader is the type of IndexReader.
 	TypeIndexReader = "IndexReader"
-	// TypeStreamReader is the type of TableReader.
+	// TypeStreamReader is the type of StreamReader.
 	TypeStreamReader = "StreamReader"
 )
 
@@ -366,7 +366,7 @@ func (p PhysicalTableReader) Init(ctx sessionctx.Context) *PhysicalTableReader {
 }
 
 func (p PhysicalStreamReader) Init(ctx sessionctx.Context) *PhysicalStreamReader {
-	p.basePhysicalPlan = newBasePhysicalPlan(ctx, TypeTableReader, &p)
+	p.basePhysicalPlan = newBasePhysicalPlan(ctx, TypeStreamReader, &p)
 	return &p
 }
 
