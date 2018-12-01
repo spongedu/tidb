@@ -14,6 +14,7 @@
 package executor
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -944,13 +945,31 @@ type StreamWindowHashAggExec struct {
 	batchSize int
 	totalSize int
 
-	lastIter *chunk.Iterator4Chunk
+	lastIter  *chunk.Iterator4Chunk
+
+	winCol    string
+	winColIdx int
+	winSize uint64
 }
 
 // Open implements the Executor Open interface.
 func (e *StreamWindowHashAggExec) Open(ctx context.Context) error {
 	if err := e.baseExecutor.Open(ctx); err != nil {
 		return errors.Trace(err)
+	}
+	for i, c := range e.schema.Columns {
+		fmt.Printf("i=%d\n",i)
+		fmt.Printf("c=%s\n",c.ColName.L)
+	}
+	found := false
+	for i, c := range e.children[0].Schema().Columns {
+		if c.ColName.L == e.winCol {
+			e.winColIdx = i
+			found = true
+		}
+	}
+	if !found {
+		return errors.New("Fail to find window col")
 	}
 	e.reset()
 	e.childResult = e.children[0].newFirstChunk()
@@ -972,13 +991,13 @@ func (e *StreamWindowHashAggExec) reset() {
 //TODO: Fix the logic here
 func (e *StreamWindowHashAggExec) shouldReset() bool {
 	//return e.childResult.NumRows() == 0
-	return e.batchSize == 4
+	return e.batchSize == 6
 }
 
 //TODO: Fix the logic here
 func (e *StreamWindowHashAggExec) shouldStop() bool {
 	//return e.childResult.NumRows() == 0
-	return e.totalSize >= 19
+	return e.totalSize >= 12
 }
 
 

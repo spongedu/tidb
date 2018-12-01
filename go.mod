@@ -49,4 +49,4 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )
 
-replace github.com/pingcap/parser => github.com/spongedu/parser v0.0.0-20181102150703-263a8d3a093d
+replace github.com/pingcap/parser => github.com/spongedu/parser v0.0.0-20181102150703-69c772388fc2

@@ -122,14 +122,23 @@ func (b *PlanBuilder) buildAggregation(p LogicalPlan, aggFuncList []*ast.Aggrega
 		newCol.RetType = newFunc.RetTp
 		schema4Agg.Append(newCol)
 	}
+	//TODO: Complete here
+	if sw != nil {
+		plan4Agg.AggWindow = &aggregation.AggWindowDesc{Size: sw.Size, WinColName: sw.WinCol}
+	//	winStartCol := &expression.Column{
+	//		ColName:  model.NewCIStr("window_start"),
+	//		UniqueID: plan4Agg.ctx.GetSessionVars().AllocPlanColumnID(),
+	//	}
+	//	winEndCol := &expression.Column{
+	//		ColName:  model.NewCIStr("window_end"),
+	//		UniqueID: plan4Agg.ctx.GetSessionVars().AllocPlanColumnID(),
+	//	}
+	//	schema4Agg.Columns = append([]*expression.Column{winStartCol, winEndCol}, schema4Agg.Columns...)
+	}
 	plan4Agg.SetChildren(p)
 	plan4Agg.GroupByItems = gbyItems
 	plan4Agg.SetSchema(schema4Agg)
 	plan4Agg.collectGroupByColumns()
-	//TODO: Complete here
-	if sw != nil {
-		plan4Agg.AggWindow = &aggregation.AggWindowDesc{Size: sw.Size}
-	}
 	return plan4Agg, aggIndexMap, nil
 }
 

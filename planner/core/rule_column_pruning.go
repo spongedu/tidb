@@ -16,8 +16,10 @@ package core
 import (
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
+	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/infoschema"
+	"github.com/pingcap/tidb/types"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -85,11 +87,27 @@ func (p *LogicalSelection) PruneColumns(parentUsedCols []*expression.Column) {
 func (la *LogicalAggregation) PruneColumns(parentUsedCols []*expression.Column) {
 	child := la.children[0]
 	used := getUsedList(parentUsedCols, la.Schema())
+	//for i := len(used) - 1; i >= 0; i-- {
 	for i := len(used) - 1; i >= 0; i-- {
 		if !used[i] {
 			la.schema.Columns = append(la.schema.Columns[:i], la.schema.Columns[i+1:]...)
 			la.AggFuncs = append(la.AggFuncs[:i], la.AggFuncs[i+1:]...)
 		}
+	}
+	//TODO: Complete here
+	if la.AggWindow != nil {
+		winStartCol := &expression.Column{
+			ColName:  model.NewCIStr("window_start"),
+			UniqueID: la.ctx.GetSessionVars().AllocPlanColumnID(),
+			RetType: 	types.NewFieldType(mysql.TypeLong),
+		}
+		winEndCol := &expression.Column{
+			ColName:  model.NewCIStr("window_end"),
+			UniqueID: la.ctx.GetSessionVars().AllocPlanColumnID(),
+			RetType: 	types.NewFieldType(mysql.TypeLong),
+		}
+		la.schema.Columns = append(la.schema.Columns, []*expression.Column{winStartCol, winEndCol}...)
+		return
 	}
 	var selfUsedCols []*expression.Column
 	for _, aggrFunc := range la.AggFuncs {
@@ -109,9 +127,6 @@ func (la *LogicalAggregation) PruneColumns(parentUsedCols []*expression.Column) 
 		if len(la.GroupByItems) == 0 {
 			la.GroupByItems = []expression.Expression{expression.One}
 		}
-	}
-	if la.AggWindow != nil {
-		return
 	}
 	child.PruneColumns(selfUsedCols)
 }

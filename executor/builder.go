@@ -1116,6 +1116,8 @@ func (b *executorBuilder) buildHashAgg(v *plannercore.PhysicalHashAgg) Executor 
 			defaultVal:       e.defaultVal,
 
 			childResult: e.childResult,
+			winCol:      v.StreamWindow.WinColName,
+			winSize: v.StreamWindow.Size,
 		}
 	}
 
