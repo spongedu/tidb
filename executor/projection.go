@@ -14,6 +14,7 @@
 package executor
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -65,6 +66,10 @@ type ProjectionExec struct {
 
 // Open implements the Executor Open interface.
 func (e *ProjectionExec) Open(ctx context.Context) error {
+	for i, c := range e.schema.Columns {
+		fmt.Printf("i=%d\n",i)
+		fmt.Printf("c=%s\n",c.ColName.L)
+	}
 	if err := e.baseExecutor.Open(ctx); err != nil {
 		return errors.Trace(err)
 	}

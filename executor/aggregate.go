@@ -14,7 +14,7 @@
 package executor
 
 import (
-	"fmt"
+	//"fmt"
 	"sync"
 	"time"
 
@@ -957,10 +957,10 @@ func (e *StreamWindowHashAggExec) Open(ctx context.Context) error {
 	if err := e.baseExecutor.Open(ctx); err != nil {
 		return errors.Trace(err)
 	}
-	for i, c := range e.schema.Columns {
-		fmt.Printf("i=%d\n",i)
-		fmt.Printf("c=%s\n",c.ColName.L)
-	}
+	//for i, c := range e.schema.Columns {
+	//	fmt.Printf("i=%d\n",i)
+	//	fmt.Printf("c=%s\n",c.ColName.L)
+	//}
 	found := false
 	for i, c := range e.children[0].Schema().Columns {
 		if c.ColName.L == e.winCol {
@@ -1063,6 +1063,8 @@ func (e *StreamWindowHashAggExec) next(ctx context.Context, chk *chunk.Chunk) er
 		for i, af := range e.PartialAggFuncs {
 			af.AppendFinalResult2Chunk(e.ctx, partialResults[i], chk)
 		}
+		chk.AppendInt64(2, 10)
+		chk.AppendInt64(3, 10)
 		if chk.NumRows() == e.maxChunkSize || i == e.totalSize || i == e.batchSize {
 			e.cursor4GroupKey++
 			return nil

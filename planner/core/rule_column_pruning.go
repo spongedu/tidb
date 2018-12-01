@@ -16,10 +16,10 @@ package core
 import (
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
-	"github.com/pingcap/parser/mysql"
+	//"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/infoschema"
-	"github.com/pingcap/tidb/types"
+	//"github.com/pingcap/tidb/types"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -96,17 +96,17 @@ func (la *LogicalAggregation) PruneColumns(parentUsedCols []*expression.Column) 
 	}
 	//TODO: Complete here
 	if la.AggWindow != nil {
-		winStartCol := &expression.Column{
-			ColName:  model.NewCIStr("window_start"),
-			UniqueID: la.ctx.GetSessionVars().AllocPlanColumnID(),
-			RetType: 	types.NewFieldType(mysql.TypeLong),
-		}
-		winEndCol := &expression.Column{
-			ColName:  model.NewCIStr("window_end"),
-			UniqueID: la.ctx.GetSessionVars().AllocPlanColumnID(),
-			RetType: 	types.NewFieldType(mysql.TypeLong),
-		}
-		la.schema.Columns = append(la.schema.Columns, []*expression.Column{winStartCol, winEndCol}...)
+		//winStartCol := &expression.Column{
+		//	ColName:  model.NewCIStr("window_start"),
+		//	UniqueID: la.ctx.GetSessionVars().AllocPlanColumnID(),
+		//	RetType: 	types.NewFieldType(mysql.TypeLong),
+		//}
+		//winEndCol := &expression.Column{
+		//	ColName:  model.NewCIStr("window_end"),
+		//	UniqueID: la.ctx.GetSessionVars().AllocPlanColumnID(),
+		//	RetType: 	types.NewFieldType(mysql.TypeLong),
+		//}
+		//la.schema.Columns = append(la.schema.Columns, []*expression.Column{winStartCol, winEndCol}...)
 		return
 	}
 	var selfUsedCols []*expression.Column
