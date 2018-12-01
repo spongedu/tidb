@@ -281,6 +281,8 @@ github.com/spongedu/parser v0.0.0-20181102150703-05d67ec39b67 h1:Yb88YfrMzIZWbXi
 github.com/spongedu/parser v0.0.0-20181102150703-05d67ec39b67/go.mod h1:pt5ToBPRXvy7eNveA9VEwpNj5AQiVGE4GaPxBeAmeUo=
 github.com/spongedu/parser v0.0.0-20181102150703-263a8d3a093d h1:ympimjDjKqSoc4Y1XUYmc1ZbyYfC99jNdOJIeySLLHI=
 github.com/spongedu/parser v0.0.0-20181102150703-263a8d3a093d/go.mod h1:pt5ToBPRXvy7eNveA9VEwpNj5AQiVGE4GaPxBeAmeUo=
+github.com/spongedu/parser v0.0.0-20181102150703-28da3dcd8827 h1:0PQpmdl+tqYB+TlfTSgMjXHaLlQ6PrLEifBuPykWJys=
+github.com/spongedu/parser v0.0.0-20181102150703-28da3dcd8827/go.mod h1:pt5ToBPRXvy7eNveA9VEwpNj5AQiVGE4GaPxBeAmeUo=
 github.com/spongedu/parser v0.0.0-20181102150703-2ae733bc2c81 h1:rs+sXF/OicOiX//QfVIVDfBvsB5MzcE0coyHDWTHvmw=
 github.com/spongedu/parser v0.0.0-20181102150703-2ae733bc2c81/go.mod h1:pt5ToBPRXvy7eNveA9VEwpNj5AQiVGE4GaPxBeAmeUo=
 github.com/spongedu/parser v0.0.0-20181102150703-36c270493d6d h1:qEeHZ/BVNH8zriuiZKsbq9GzaXdx6Vyw7EWIgLKTcuk=
