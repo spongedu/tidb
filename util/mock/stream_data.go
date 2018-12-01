@@ -14,10 +14,12 @@
 package mock
 
 import (
-	"strconv"
+	"encoding/json"
+	"fmt"
 
 	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb/types"
+	log "github.com/sirupsen/logrus"
 )
 
 // Mock data for stream reader.
@@ -25,7 +27,7 @@ var MockStreamData []Event
 
 type Event struct {
 	ID         int64      `json:"id"`
-	Content    string     `json:"name"`
+	Content    string     `json:"content"`
 	CreateTime types.Time `json:"create_time"`
 }
 
@@ -38,7 +40,24 @@ func init() {
 			Type: mysql.TypeTimestamp,
 			Fsp:  types.DefaultFsp,
 		}
-		evt := Event{int64(i), strconv.Itoa(i), tt}
+		content := fmt.Sprintf("TiDB Stream Test Data %d", i)
+		evt := Event{int64(i), content, tt}
 		MockStreamData = append(MockStreamData, evt)
+	}
+
+	for i := 0; i < 10; i++ {
+		data, err := json.Marshal(MockStreamData[i])
+		if err != nil {
+			log.Fatalf("[mock stream data marshal failed]%v", err)
+		}
+
+		evt := Event{}
+		err = json.Unmarshal([]byte(data), &evt)
+		if err != nil {
+			log.Fatalf("[mock stream data unmarshal failed]%v", err)
+		}
+
+		MockStreamData[i] = evt
+		log.Errorf("[mock stream data]%v-%s", MockStreamData[i], string(data))
 	}
 }
