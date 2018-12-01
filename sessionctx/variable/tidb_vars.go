@@ -226,8 +226,8 @@ const (
 	// tidb log stream table pos
 	TiDBLogStreamTablePos = "tidb_log_stream_table_pos"
 
-	// tidb log stream table pos
-	TiDBDemoStreamTablePos = "tidb_demo_stream_table_pos"
+	// tidb stream table demo pos
+	TiDBStreamTableDemoPos = "tidb_stream_table_demo_pos"
 )
 
 // Default TiDB system variable values.

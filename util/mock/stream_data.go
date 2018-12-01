@@ -16,8 +16,10 @@ package mock
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb/sessionctx/stmtctx"
 	"github.com/pingcap/tidb/types"
 	log "github.com/sirupsen/logrus"
 )
@@ -28,6 +30,7 @@ var (
 	MockKafkaStreamData  []KafkaEvent
 	MockPulsarStreamData []PulsarEvent
 	MockLogStreamData    []LogEvent
+	MockStreamJsonData   []string
 )
 
 type Event struct {
@@ -54,9 +57,11 @@ type LogEvent struct {
 	CreateTime types.Time `json:"create_time"`
 }
 
+// {"id":49,"content":"TiDB Stream Demo Data 49","create_time":"2018-12-01 14:39:22"}
+
 func genData(i int, t types.Time) Event {
 	tt := types.Time{
-		Time: types.FromDate(t.Time.Year(), t.Time.Month(), t.Time.Day(), t.Time.Hour(), t.Time.Minute(), t.Time.Second()+i, t.Time.Microsecond()),
+		Time: types.FromDate(t.Time.Year(), t.Time.Month(), t.Time.Day(), t.Time.Hour(), t.Time.Minute(), t.Time.Second(), t.Time.Microsecond()),
 		Type: mysql.TypeTimestamp,
 		Fsp:  types.DefaultFsp,
 	}
@@ -68,7 +73,7 @@ func genData(i int, t types.Time) Event {
 
 func genKafkaData(i int, t types.Time) KafkaEvent {
 	tt := types.Time{
-		Time: types.FromDate(t.Time.Year(), t.Time.Month(), t.Time.Day(), t.Time.Hour(), t.Time.Minute(), t.Time.Second()+i, t.Time.Microsecond()),
+		Time: types.FromDate(t.Time.Year(), t.Time.Month(), t.Time.Day(), t.Time.Hour(), t.Time.Minute(), t.Time.Second(), t.Time.Microsecond()),
 		Type: mysql.TypeTimestamp,
 		Fsp:  types.DefaultFsp,
 	}
@@ -89,16 +94,29 @@ func genLogData(i int, t types.Time) LogEvent {
 }
 
 func init() {
+	sc := &stmtctx.StatementContext{
+		TimeZone: time.UTC,
+	}
+	secondDur, err := types.ParseDuration(sc, "00:00:01", types.MaxFsp)
+	if err != nil {
+		log.Fatalf("[parse duration failed]%v", err)
+	}
+
 	t := types.CurrentTime(mysql.TypeTimestamp)
 
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 1000; i++ {
+		t, err = t.Add(sc, secondDur)
+		if err != nil {
+			log.Fatalf("[add time duration failed]%v", err)
+		}
+
 		MockStreamData = append(MockStreamData, genData(i, t))
 		MockKafkaStreamData = append(MockKafkaStreamData, genKafkaData(i, t))
 		MockPulsarStreamData = append(MockPulsarStreamData, genPulsarData(i, t))
 		MockLogStreamData = append(MockLogStreamData, genLogData(i, t))
 	}
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 1000; i++ {
 		data, err := json.Marshal(MockStreamData[i])
 		if err != nil {
 			log.Fatalf("[mock stream data marshal failed]%v", err)
@@ -111,10 +129,11 @@ func init() {
 		}
 
 		MockStreamData[i] = evt
-		log.Errorf("[mock stream data]%v-%s", MockStreamData[i], string(data))
+		MockStreamJsonData = append(MockStreamJsonData, string(data))
 
-		log.Errorf("[mock stream kafka data]%v", MockKafkaStreamData[i])
-		log.Errorf("[mock stream pulsar data]%v", MockPulsarStreamData[i])
-		log.Errorf("[mock stream log data]%v", MockLogStreamData[i])
+		// log.Errorf("[mock stream data]%v-%s", MockStreamData[i], string(data))
+		// log.Errorf("[mock stream kafka data]%v", MockKafkaStreamData[i])
+		// log.Errorf("[mock stream pulsar data]%v", MockPulsarStreamData[i])
+		// log.Errorf("[mock stream log data]%v", MockLogStreamData[i])
 	}
 }

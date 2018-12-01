@@ -14,6 +14,7 @@
 package executor
 
 import (
+	gojson "encoding/json"
 	"strconv"
 	"strings"
 
@@ -55,8 +56,8 @@ func (e *StreamReaderExecutor) setVariableName(tp string) {
 		e.variableName = variable.TiDBPulsarStreamTablePos
 	} else if tp == "log" {
 		e.variableName = variable.TiDBLogStreamTablePos
-	} else {
-		e.variableName = variable.TiDBDemoStreamTablePos
+	} else if tp == "demo" {
+		e.variableName = variable.TiDBStreamTableDemoPos
 	}
 }
 
@@ -165,8 +166,13 @@ func (e *StreamReaderExecutor) fetchAll(cursor int) error {
 
 func (e *StreamReaderExecutor) fetchMockData(cursor int) error {
 	for i := cursor; i < maxFetchCnt && i < cursor+batchFetchCnt; i++ {
-		row := []interface{}{mock.MockStreamData[i].ID, mock.MockStreamData[i].Content, mock.MockStreamData[i].CreateTime}
-		e.appendRow(e.result, row)
+		data, err := e.getData(mock.MockStreamJsonData[i])
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		row := chunk.MutRowFromDatums(data).ToRow()
+		e.result.AppendRow(row)
 	}
 
 	return nil
@@ -188,6 +194,32 @@ func (e *StreamReaderExecutor) fetchMockPulsarData(cursor int) error {
 	}
 
 	return nil
+}
+
+func (e *StreamReaderExecutor) getData(data string) ([]types.Datum, error) {
+	m := make(map[string]interface{})
+	err := gojson.Unmarshal([]byte(data), &m)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	row := make([]types.Datum, 0, len(e.Columns))
+	for _, col := range e.Columns {
+		name := col.Name.L
+		if value, ok := m[name]; ok {
+			data := types.NewDatum(value)
+			val, err := data.ConvertTo(e.ctx.GetSessionVars().StmtCtx, &col.FieldType)
+			if err != nil {
+				return nil, errors.Trace(err)
+			}
+			row = append(row, val)
+		} else {
+			data := types.NewDatum(nil)
+			row = append(row, data)
+		}
+	}
+
+	return row, nil
 }
 
 func (e *StreamReaderExecutor) appendRow(chk *chunk.Chunk, row []interface{}) {

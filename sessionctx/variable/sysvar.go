@@ -675,7 +675,7 @@ var defaultSysVars = []*SysVar{
 	{ScopeGlobal | ScopeSession, TiDBKafkaStreamTablePos, "0"},
 	{ScopeGlobal | ScopeSession, TiDBPulsarStreamTablePos, "0"},
 	{ScopeGlobal | ScopeSession, TiDBLogStreamTablePos, "0"},
-	{ScopeGlobal | ScopeSession, TiDBDemoStreamTablePos, "0"},
+	{ScopeGlobal | ScopeSession, TiDBStreamTableDemoPos, "0"},
 }
 
 // SynonymsSysVariables is synonyms of system variables.
