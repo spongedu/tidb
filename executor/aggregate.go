@@ -14,7 +14,6 @@
 package executor
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -959,16 +958,8 @@ func (e *StreamWindowHashAggExec) Open(ctx context.Context) error {
 	if err := e.baseExecutor.Open(ctx); err != nil {
 		return errors.Trace(err)
 	}
-	for i, c := range e.schema.Columns {
-		fmt.Printf("i=%d\n",i)
-		fmt.Printf("c=%s\n",c.ColName.L)
-		fmt.Printf("c=%p\n",c)
-	}
 	found := false
 	for i, c := range e.children[0].Schema().Columns {
-		fmt.Printf("i=%d\n",i)
-		fmt.Printf("c=%s\n",c.ColName.L)
-		fmt.Printf("c=%p\n",c)
 		if c.ColName.L == e.winCol {
 			e.winColIdx = i
 			found = true

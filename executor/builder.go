@@ -1735,11 +1735,6 @@ func (b *executorBuilder) buildTableReader(v *plannercore.PhysicalTableReader) *
 }
 
 func (b *executorBuilder) buildStreamReader(v *plannercore.PhysicalStreamReader) *StreamReaderExecutor {
-	for i, c := range v.Schema().Columns {
-		fmt.Printf("i=%d\n", i)
-		fmt.Printf("c=%s\n", c.ColName.L)
-		fmt.Println("tttt")
-	}
 	return &StreamReaderExecutor{
 		baseExecutor:    newBaseExecutor(b.ctx, v.Schema(), v.ExplainID()),
 	}
