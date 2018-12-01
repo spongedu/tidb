@@ -68,7 +68,10 @@ func (e *StreamReaderExecutor) Open(ctx context.Context) error {
 	e.setVariableName(strings.ToLower(tp))
 
 	var err error
-	value, _ := e.ctx.GetSessionVars().GlobalVarsAccessor.GetGlobalSysVar(e.variableName)
+	value, err := e.ctx.GetSessionVars().GlobalVarsAccessor.GetGlobalSysVar(e.variableName)
+	if err != nil {
+		return errors.Trace(err)
+	}
 	if value != "" {
 		e.pos, err = strconv.Atoi(value)
 		if err != nil {
@@ -94,8 +97,6 @@ func (e *StreamReaderExecutor) Next(ctx context.Context, chk *chunk.Chunk) error
 	if err != nil {
 		return errors.Trace(err)
 	}
-
-	log.Warnf("[qiuyesuifeng]%v:%v:%v", e.Table, e.cursor, e.pos)
 
 	chk.GrowAndReset(e.maxChunkSize)
 	if e.result == nil {
