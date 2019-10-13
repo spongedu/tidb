@@ -59,6 +59,10 @@ var (
 // PhysicalStreamReader is the table reader in tidb.
 type PhysicalStreamReader struct {
 	physicalSchemaProducer
+	Table       *model.TableInfo
+	Columns     []*model.ColumnInfo
+	TableAsName *model.CIStr
+	DBName      model.CIStr
 }
 
 // PhysicalTableReader is the table reader in tidb.
@@ -377,6 +381,7 @@ type basePhysicalAgg struct {
 
 	AggFuncs     []*aggregation.AggFuncDesc
 	GroupByItems []expression.Expression
+	StreamWindow *aggregation.AggWindowDesc
 }
 
 func (p *basePhysicalAgg) numDistinctFunc() (num int) {

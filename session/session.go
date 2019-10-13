@@ -964,6 +964,7 @@ func (s *session) SetGlobalSysVar(name, value string) error {
 }
 
 func (s *session) ParseSQL(ctx context.Context, sql, charset, collation string) ([]ast.StmtNode, []error, error) {
+	s.parser.EnableWindowFunc(true)
 	if span := opentracing.SpanFromContext(ctx); span != nil && span.Tracer() != nil {
 		span1 := span.Tracer().StartSpan("session.ParseSQL", opentracing.ChildOf(span.Context()))
 		defer span1.Finish()

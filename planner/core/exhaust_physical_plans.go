@@ -1440,6 +1440,7 @@ func (la *LogicalAggregation) getHashAggs(prop *property.PhysicalProperty) []Phy
 			AggFuncs:     la.AggFuncs,
 		}.initForHash(la.ctx, la.stats.ScaleByExpectCnt(prop.ExpectedCnt), la.blockOffset, &property.PhysicalProperty{ExpectedCnt: math.MaxFloat64, TaskTp: taskTp})
 		agg.SetSchema(la.schema.Clone())
+		agg.StreamWindow = la.AggWindow
 		hashAggs = append(hashAggs, agg)
 	}
 	return hashAggs
@@ -1483,7 +1484,11 @@ func (la *LogicalAggregation) exhaustPhysicalPlans(prop *property.PhysicalProper
 
 	aggs := make([]PhysicalPlan, 0, len(hashAggs)+len(streamAggs))
 	aggs = append(aggs, hashAggs...)
-	aggs = append(aggs, streamAggs...)
+	//TODO: Complete here
+	if la.AggWindow == nil {
+		aggs = append(aggs, la.getStreamAggs(prop)...)
+	}
+
 	return aggs
 }
 

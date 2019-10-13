@@ -550,9 +550,9 @@ func (w *worker) runDDLJob(d *ddlCtx, t *meta.Meta, job *model.Job) (ver int64, 
 	case model.ActionAddTablePartition:
 		ver, err = onAddTablePartition(t, job)
 	case model.ActionCreateStream:
-	    ver, err = onCreateStream(d, t, job)
+		ver, err = onCreateStream(d, t, job)
 	case model.ActionDropStream:
-	    ver, err = onDropStream(t, job)
+		ver, err = onDropStream(t, job)
 	case model.ActionModifyTableCharsetAndCollate:
 		ver, err = onModifyTableCharsetAndCollate(t, job)
 	case model.ActionRecoverTable:

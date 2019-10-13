@@ -726,6 +726,11 @@ var defaultSysVars = []*SysVar{
 	{ScopeSession, TiDBReplicaRead, "leader"},
 	{ScopeSession, TiDBAllowRemoveAutoInc, BoolToIntStr(DefTiDBAllowRemoveAutoInc)},
 	{ScopeGlobal | ScopeSession, TiDBEnableStmtSummary, "0"},
+	// Stream Table Variable
+	{ScopeGlobal | ScopeSession, TiDBKafkaStreamTablePos, "0"},
+	{ScopeGlobal | ScopeSession, TiDBPulsarStreamTablePos, "0"},
+	{ScopeGlobal | ScopeSession, TiDBLogStreamTablePos, "0"},
+	{ScopeGlobal | ScopeSession, TiDBStreamTableDemoPos, "0"},
 }
 
 // SynonymsSysVariables is synonyms of system variables.

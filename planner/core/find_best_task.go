@@ -375,10 +375,29 @@ func (ds *DataSource) skylinePruning(prop *property.PhysicalProperty) []*candida
 // It will enumerate all the available indices and choose a plan with least cost.
 func (ds *DataSource) findBestTask(prop *property.PhysicalProperty) (t task, err error) {
 	if ds.tableInfo.IsStream == true {
-		sr := PhysicalStreamReader{}.Init(ds.ctx, ds.blockOffset)
+		sr := PhysicalStreamReader{
+			Table:       ds.tableInfo,
+			Columns:     ds.Columns,
+			TableAsName: ds.TableAsName,
+			DBName:      ds.DBName,
+		}.Init(ds.ctx, ds.blockOffset)
+
 		sr.SetSchema(ds.schema)
 		sr.stats = &property.StatsInfo{RowCount: 10}
 		t := rootTask{p: sr}
+		// access where condition
+		for _, path := range ds.possibleAccessPaths {
+			if path.isTablePath {
+				tableConds := path.tableFilters
+				if tableConds != nil {
+					tableSel := PhysicalSelection{Conditions: tableConds}.
+						Init(ds.ctx, ds.stats.ScaleByExpectCnt(0), ds.blockOffset)
+					tableSel.SetChildren(t.p)
+					t.p = tableSel
+				}
+			}
+		}
+
 		return &t, nil
 	}
 

@@ -16,6 +16,7 @@ package executor
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
@@ -944,4 +945,160 @@ func (e *groupChecker) reset() {
 	if e.tmpGroupKey != nil {
 		e.tmpGroupKey = e.tmpGroupKey[:0]
 	}
+}
+
+// ########### For StreamWindowHashAgg
+
+type StreamWindowHashAggExec struct {
+	baseExecutor
+
+	prepared         bool
+	sc               *stmtctx.StatementContext
+	PartialAggFuncs  []aggfuncs.AggFunc
+	FinalAggFuncs    []aggfuncs.AggFunc
+	partialResultMap aggPartialResultMapper
+	groupSet         set.StringSet
+	groupKeys        []string
+	cursor4GroupKey  int
+	GroupByItems     []expression.Expression
+	groupKeyBuffer   []byte
+	groupValDatums   []types.Datum
+
+	defaultVal *chunk.Chunk
+
+	childResult *chunk.Chunk
+}
+
+// Open implements the Executor Open interface.
+func (e *StreamWindowHashAggExec) Open(ctx context.Context) error {
+	if err := e.baseExecutor.Open(ctx); err != nil {
+		return errors.Trace(err)
+	}
+	e.prepared = false
+	e.groupSet = set.NewStringSet()
+	e.partialResultMap = make(aggPartialResultMapper, 0)
+	e.groupKeyBuffer = make([]byte, 0, 8)
+	e.groupValDatums = make([]types.Datum, 0, len(e.groupKeyBuffer))
+	e.childResult = newFirstChunk(e.children[0])
+	return nil
+}
+
+// Next implements the Executor Next interface.
+func (e *StreamWindowHashAggExec) Next(ctx context.Context, chk *chunk.Chunk) error {
+	if e.runtimeStats != nil {
+		start := time.Now()
+		defer func() { e.runtimeStats.Record(time.Now().Sub(start), chk.NumRows()) }()
+	}
+	chk.Reset()
+	return errors.Trace(e.next(ctx, chk))
+}
+
+// Close implements the Executor Close interface.
+func (e *StreamWindowHashAggExec) Close() error {
+	e.childResult = nil
+	e.groupSet = nil
+	e.partialResultMap = nil
+	return nil
+}
+
+// unparallelExec executes hash aggregation algorithm in single thread.
+func (e *StreamWindowHashAggExec) next(ctx context.Context, chk *chunk.Chunk) error {
+	// In this stage we consider all data from src as a single group.
+	if !e.prepared {
+		err := e.execute(ctx)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		if (len(e.groupSet) == 0) && len(e.GroupByItems) == 0 {
+			// If no groupby and no data, we should add an empty group.
+			// For example:
+			// "select count(c) from t;" should return one row [0]
+			// "select count(c) from t group by c1;" should return empty result set.
+			e.groupSet.Insert("")
+			e.groupKeys = append(e.groupKeys, "")
+		}
+		e.prepared = true
+	}
+	chk.Reset()
+
+	// Since we return e.maxChunkSize rows every time, so we should not traverse
+	// `groupSet` because of its randomness.
+	for ; e.cursor4GroupKey < len(e.groupKeys); e.cursor4GroupKey++ {
+		partialResults := e.getPartialResults(e.groupKeys[e.cursor4GroupKey])
+		if len(e.PartialAggFuncs) == 0 {
+			chk.SetNumVirtualRows(chk.NumRows() + 1)
+		}
+		for i, af := range e.PartialAggFuncs {
+			af.AppendFinalResult2Chunk(e.ctx, partialResults[i], chk)
+		}
+		if chk.NumRows() == e.maxChunkSize {
+			e.cursor4GroupKey++
+			return nil
+		}
+	}
+	return nil
+}
+
+// execute fetches Chunks from src and update each aggregate function for each row in Chunk.
+func (e *StreamWindowHashAggExec) execute(ctx context.Context) (err error) {
+	inputIter := chunk.NewIterator4Chunk(e.childResult)
+	for {
+		err := e.children[0].Next(ctx, e.childResult)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		// no more data.
+		if e.childResult.NumRows() == 0 {
+			return nil
+		}
+		for row := inputIter.Begin(); row != inputIter.End(); row = inputIter.Next() {
+			groupKey, err := e.getGroupKey(row)
+			if err != nil {
+				return errors.Trace(err)
+			}
+			if !e.groupSet.Exist(groupKey) {
+				e.groupSet.Insert(groupKey)
+				e.groupKeys = append(e.groupKeys, groupKey)
+			}
+			partialResults := e.getPartialResults(groupKey)
+			for i, af := range e.PartialAggFuncs {
+				err = af.UpdatePartialResult(e.ctx, []chunk.Row{row}, partialResults[i])
+				if err != nil {
+					return errors.Trace(err)
+				}
+			}
+		}
+	}
+}
+
+func (e *StreamWindowHashAggExec) getPartialResults(groupKey string) []aggfuncs.PartialResult {
+	partialResults, ok := e.partialResultMap[groupKey]
+	if !ok {
+		partialResults = make([]aggfuncs.PartialResult, 0, len(e.PartialAggFuncs))
+		for _, af := range e.PartialAggFuncs {
+			partialResults = append(partialResults, af.AllocPartialResult())
+		}
+		e.partialResultMap[groupKey] = partialResults
+	}
+	return partialResults
+}
+
+func (e *StreamWindowHashAggExec) getGroupKey(row chunk.Row) (string, error) {
+	e.groupValDatums = e.groupValDatums[:0]
+	for _, item := range e.GroupByItems {
+		v, err := item.Eval(row)
+		if item.GetType().Tp == mysql.TypeNewDecimal {
+			v.SetLength(0)
+		}
+		if err != nil {
+			return "", errors.Trace(err)
+		}
+		e.groupValDatums = append(e.groupValDatums, v)
+	}
+	var err error
+	e.groupKeyBuffer, err = codec.EncodeValue(e.sc, e.groupKeyBuffer[:0], e.groupValDatums...)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	return string(e.groupKeyBuffer), nil
 }

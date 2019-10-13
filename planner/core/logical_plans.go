@@ -264,6 +264,8 @@ type LogicalAggregation struct {
 
 	possibleProperties [][]*expression.Column
 	inputCount         float64 // inputCount is the input count of this plan.
+
+	AggWindow *aggregation.AggWindowDesc
 }
 
 func (la *LogicalAggregation) extractCorrelatedCols() []*expression.CorrelatedColumn {

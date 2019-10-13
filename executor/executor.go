@@ -71,6 +71,7 @@ var (
 	_ Executor = &ShowDDLJobQueriesExec{}
 	_ Executor = &SortExec{}
 	_ Executor = &StreamAggExec{}
+	_ Executor = &StreamWindowHashAggExec{}
 	_ Executor = &TableDualExec{}
 	_ Executor = &TableReaderExecutor{}
 	_ Executor = &TableScanExec{}

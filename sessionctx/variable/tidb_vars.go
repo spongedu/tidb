@@ -322,6 +322,19 @@ const (
 
 	// TiDBEnableStmtSummary indicates whether the statement summary is enabled.
 	TiDBEnableStmtSummary = "tidb_enable_stmt_summary"
+
+	// Hack for stream table demo
+	// tidb kafka stream table pos
+	TiDBKafkaStreamTablePos = "tidb_kafka_stream_table_pos"
+
+	// tidb pulsar stream table pos
+	TiDBPulsarStreamTablePos = "tidb_pulsar_stream_table_pos"
+
+	// tidb log stream table pos
+	TiDBLogStreamTablePos = "tidb_log_stream_table_pos"
+
+	// tidb stream table demo pos
+	TiDBStreamTableDemoPos = "tidb_stream_table_demo_pos"
 )
 
 // Default TiDB system variable values.

@@ -240,26 +240,26 @@ func (e *StreamReaderExecutor) fetchKafkaData(cursor int) (int, error) {
 }
 
 func (e *StreamReaderExecutor) fetchMockKafkaData(cursor int) (int, error) {
-//	var pos int
-//	for i := cursor; i < maxFetchCnt && i < cursor+batchFetchCnt; i++ {
-//		row := []interface{}{mock.MockKafkaStreamData[i].ID, mock.MockKafkaStreamData[i].Content, mock.MockKafkaStreamData[i].CreateTime}
-//		e.appendRow(e.result, row)
-//		pos = i
-//	}
-//
-//	return pos, nil
+	//	var pos int
+	//	for i := cursor; i < maxFetchCnt && i < cursor+batchFetchCnt; i++ {
+	//		row := []interface{}{mock.MockKafkaStreamData[i].ID, mock.MockKafkaStreamData[i].Content, mock.MockKafkaStreamData[i].CreateTime}
+	//		e.appendRow(e.result, row)
+	//		pos = i
+	//	}
+	//
+	//	return pos, nil
 	return 0, nil
 }
 
 func (e *StreamReaderExecutor) fetchMockPulsarData(cursor int) (int, error) {
-//	var pos int
-//	for i := cursor; i < maxFetchCnt && i < cursor+batchFetchCnt; i++ {
-//		row := []interface{}{mock.MockPulsarStreamData[i].ID, mock.MockPulsarStreamData[i].Content, mock.MockPulsarStreamData[i].CreateTime}
-//		e.appendRow(e.result, row)
-//		pos = i
-//	}
-//
-//	return pos, nil
+	//	var pos int
+	//	for i := cursor; i < maxFetchCnt && i < cursor+batchFetchCnt; i++ {
+	//		row := []interface{}{mock.MockPulsarStreamData[i].ID, mock.MockPulsarStreamData[i].Content, mock.MockPulsarStreamData[i].CreateTime}
+	//		e.appendRow(e.result, row)
+	//		pos = i
+	//	}
+	//
+	//	return pos, nil
 	return 0, nil
 }
 
