@@ -439,6 +439,8 @@ const tableBlockProfile = "CREATE TABLE IF NOT EXISTS " + tableNameBlockProfile 
 	"FILE VARCHAR(512) NOT NULL);"
 
 // tableGoroutine contains the columns name definitions for table events_goroutine
-const tableGoroutine = "CREATE TABLE IF NOT EXISTS " + tableNameGoroutine + " (" +
+const tableGoroutine = "CREATE TABLE IF NOT EXISTS " + tableNameGoroutines + " (" +
 	"FUNCTION VARCHAR(512) NOT NULL," +
-	"FILE VARCHAR(512));"
+	"ID INT(8) NOT NULL," +
+	"STATE VARCHAR(16) NOT NULL," +
+	"LOCATION VARCHAR(512));"

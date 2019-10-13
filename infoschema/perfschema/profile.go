@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"runtime/pprof"
+	"strconv"
 	"strings"
 	"time"
 
@@ -207,4 +208,57 @@ func profileGraph(name string) ([][]types.Datum, error) {
 		return nil, err
 	}
 	return profileReaderToDatums(buffer)
+}
+
+func goroutinesList() ([][]types.Datum, error) {
+	p := pprof.Lookup("goroutine")
+	if p == nil {
+		return nil, errors.Errorf("cannot retrieve goroutine profile")
+	}
+
+	buffer := bytes.Buffer{}
+	err := p.WriteTo(&buffer, 2)
+	if err != nil {
+		return nil, err
+	}
+
+	goroutines := strings.Split(buffer.String(), "\n\n")
+	var rows [][]types.Datum
+	for _, goroutine := range goroutines {
+		colIndex := strings.Index(goroutine, ":")
+		if colIndex < 0 {
+			return nil, errors.New("goroutine incompatible with current go version")
+		}
+
+		headers := strings.SplitN(strings.TrimSpace(goroutine[len("goroutine")+1:colIndex]), " ", 2)
+		if len(headers) != 2 {
+			return nil, errors.Errorf("incompatible goroutine headers: %s", goroutine[len("goroutine")+1:colIndex])
+		}
+
+		id, err := strconv.Atoi(strings.TrimSpace(headers[0]))
+		if err != nil {
+			return nil, errors.Annotatef(err, "invalid goroutine id: %s", headers[0])
+		}
+		state := strings.Trim(headers[1], "[]")
+		stack := strings.Split(strings.TrimSpace(goroutine[colIndex+1:]), "\n")
+		for i := 0; i < len(stack)/2; i++ {
+			fn := stack[i*2]
+			loc := stack[i*2+1]
+			var identifier string
+			if i == 0 {
+				identifier = fn
+			} else if i == len(stack)/2-1 {
+				identifier = string(treeLastNode) + string(treeNodeIdentifier) + fn
+			} else {
+				identifier = string(treeMiddleNode) + string(treeNodeIdentifier) + fn
+			}
+			rows = append(rows, []types.Datum{
+				types.NewStringDatum(identifier),
+				types.NewIntDatum(int64(id)),
+				types.NewStringDatum(state),
+				types.NewStringDatum(strings.TrimSpace(loc)),
+			})
+		}
+	}
+	return rows, nil
 }

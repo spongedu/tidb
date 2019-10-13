@@ -31,7 +31,7 @@ const (
 	tableNameMutexProfile                    = "events_mutex_profile"
 	tableNameAllocsProfile                   = "events_allocs_profile"
 	tableNameBlockProfile                    = "events_block_profile"
-	tableNameGoroutine                       = "events_goroutine"
+	tableNameGoroutines                      = "events_goroutines"
 )
 
 // perfSchemaTable stands for the fake table all its data is in the memory.
@@ -106,7 +106,8 @@ func (vt *perfSchemaTable) getRows(ctx sessionctx.Context, cols []*table.Column)
 		fullRows, err = profileGraph("allocs")
 	case tableNameBlockProfile:
 		fullRows, err = profileGraph("block")
-	case tableNameGoroutine:
+	case tableNameGoroutines:
+		fullRows, err = goroutinesList()
 	}
 	if err != nil {
 		return
