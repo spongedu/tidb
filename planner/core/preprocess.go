@@ -79,6 +79,10 @@ type preprocessor struct {
 
 	hasStreamTable bool
 
+	strWinColName string
+
+	inStreamAgg bool
+
 	// tableAliasInJoin is a stack that keeps the table alias names for joins.
 	// len(tableAliasInJoin) may bigger than 1 because the left/right child of join may be subquery that contains `JOIN`
 	tableAliasInJoin []map[string]interface{}
@@ -120,6 +124,11 @@ func (p *preprocessor) Enter(in ast.Node) (out ast.Node, skipChildren bool) {
 		p.resolveShowStmt(node)
 	case *ast.UnionSelectList:
 		p.checkUnionSelectList(node)
+	case *ast.SelectStmt:
+		if node.GroupBy != nil && node.StreamWindowSpec != nil {
+			p.inStreamAgg = true
+		}
+
 	case *ast.DeleteTableList:
 		return in, true
 	case *ast.Join:
@@ -189,6 +198,9 @@ func (p *preprocessor) Leave(in ast.Node) (out ast.Node, ok bool) {
 	case *ast.SelectStmt:
 		if p.hasStreamTable && x.GroupBy != nil && x.StreamWindowSpec == nil {
 			p.err = errors.New("Can not execute aggregation on stream table without time window")
+		}
+		if x.StreamWindowSpec != nil {
+			x.StreamWindowSpec.WinCol = p.strWinColName
 		}
 
 	case *ast.ExplainStmt:
@@ -765,6 +777,8 @@ func (p *preprocessor) handleTableName(tn *ast.TableName) {
 	}
 	if table != nil && table.Meta().IsStream == true {
 		p.hasStreamTable = true
+		p.strWinColName = table.Meta().StreamWinCol
+
 	}
 
 	tn.TableInfo = table.Meta()

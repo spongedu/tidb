@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser/charset"
 	"github.com/pingcap/parser/model"
+	"github.com/pingcap/parser/mysql"
 	field_types "github.com/pingcap/parser/types"
 	"github.com/pingcap/tidb/ddl/util"
 	"github.com/pingcap/tidb/infoschema"
@@ -62,6 +63,13 @@ func onCreateTable(d *ddlCtx, t *meta.Meta, job *model.Job) (ver int64, _ error)
 	ver, err = updateSchemaVersion(t, job)
 	if err != nil {
 		return ver, errors.Trace(err)
+	}
+
+	// Fill in TableInfo.StreamWinCol
+	for _, c := range tbInfo.Columns {
+		if c.Tp == mysql.TypeTimestamp {
+			tbInfo.StreamWinCol = c.Name.L
+		}
 	}
 
 	switch tbInfo.State {

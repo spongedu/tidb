@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/expression"
 	plannercore "github.com/pingcap/tidb/planner/core"
 	"github.com/pingcap/tidb/types"
@@ -50,11 +51,18 @@ type SortExec struct {
 	rowPtrs []chunk.RowPtr
 
 	memTracker *memory.Tracker
+
+	streamWindowSort bool
+
+	sterminated bool
+	chk         *chunk.Chunk
 }
 
 // Close implements the Executor Close interface.
 func (e *SortExec) Close() error {
 	e.memTracker = nil
+	e.sterminated = false
+	e.chk = nil
 	return e.children[0].Close()
 }
 
@@ -73,7 +81,20 @@ func (e *SortExec) Open(ctx context.Context) error {
 
 // Next implements the Executor Next interface.
 func (e *SortExec) Next(ctx context.Context, req *chunk.Chunk) error {
-	req.Reset()
+	if !e.streamWindowSort {
+		return e.next(ctx, req)
+	} else {
+		if e.sterminated {
+			return nil
+		}
+		e.sreset()
+		return e.snext(ctx, req)
+	}
+}
+
+func (e *SortExec) next(ctx context.Context, chk *chunk.Chunk) error {
+
+	chk.Reset()
 	if !e.fetched {
 		err := e.fetchRowChunks(ctx)
 		if err != nil {
@@ -85,9 +106,39 @@ func (e *SortExec) Next(ctx context.Context, req *chunk.Chunk) error {
 		sort.Slice(e.rowPtrs, e.keyColumnsLess)
 		e.fetched = true
 	}
-	for !req.IsFull() && e.Idx < len(e.rowPtrs) {
+	for !chk.IsFull() && e.Idx < len(e.rowPtrs) {
 		rowPtr := e.rowPtrs[e.Idx]
-		req.AppendRow(e.rowChunks.GetRow(rowPtr))
+		chk.AppendRow(e.rowChunks.GetRow(rowPtr))
+		e.Idx++
+	}
+	return nil
+}
+
+func (e *SortExec) sreset() {
+	e.Idx = 0
+	e.fetched = false
+}
+
+func (e *SortExec) snext(ctx context.Context, chk *chunk.Chunk) error {
+
+	chk.Reset()
+	if !e.fetched {
+		err := e.fetchWindow(ctx)
+		if err != nil {
+			return err
+		}
+		e.initPointers()
+		e.initCompareFuncs()
+		e.buildKeyColumns()
+		sort.Slice(e.rowPtrs, e.keyColumnsLess)
+		e.fetched = true
+	}
+	for !chk.IsFull() {
+		if e.Idx >= len(e.rowPtrs) {
+			break
+		}
+		rowPtr := e.rowPtrs[e.Idx]
+		chk.AppendRow(e.rowChunks.GetRow(rowPtr))
 		e.Idx++
 	}
 	return nil
@@ -343,5 +394,31 @@ func (e *TopNExec) doCompaction() error {
 	e.memTracker.Consume(int64(-8 * len(e.rowPtrs)))
 	e.memTracker.Consume(int64(8 * len(newRowPtrs)))
 	e.rowPtrs = newRowPtrs
+	return nil
+}
+
+func (e *SortExec) fetchWindow(ctx context.Context) error {
+	fields := retTypes(e)
+	e.rowChunks = chunk.NewList(fields, e.initCap, e.maxChunkSize)
+	e.rowChunks.GetMemTracker().AttachTo(e.memTracker)
+	//e.rowChunks.GetMemTracker().SetLabel("rowChunks")
+	for {
+		if e.chk == nil {
+			e.chk = newFirstChunk(e.children[0])
+		}
+		err := e.children[0].Next(ctx, e.chk)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		rowCount := e.chk.NumRows()
+		if rowCount == 0 {
+			e.sterminated = true
+			break
+		}
+		e.rowChunks.Add(e.chk)
+		if rowCount < e.maxChunkSize {
+			break
+		}
+	}
 	return nil
 }

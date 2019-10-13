@@ -106,6 +106,7 @@ func (b *PlanBuilder) buildAggregation(ctx context.Context, p LogicalPlan, aggFu
 	b.optFlag = b.optFlag | flagPredicatePushDown
 	b.optFlag = b.optFlag | flagEliminateAgg
 	b.optFlag = b.optFlag | flagEliminateProjection
+	b.optFlag = b.optFlag | flagCompleteWindowInfo
 
 	plan4Agg := LogicalAggregation{AggFuncs: make([]*aggregation.AggFuncDesc, 0, len(aggFuncList))}.Init(b.ctx, b.getSelectOffset())
 	if hint := b.TableHints(); hint != nil {
@@ -159,14 +160,24 @@ func (b *PlanBuilder) buildAggregation(ctx context.Context, p LogicalPlan, aggFu
 		newCol.RetType = newFunc.RetTp
 		schema4Agg.Append(newCol)
 	}
+	//TODO: Complete here
+	if sw != nil {
+		plan4Agg.AggWindow = &aggregation.AggWindowDesc{Size: sw.Size, WinColName: sw.WinCol}
+		//  winStartCol := &expression.Column{
+		//      ColName:  model.NewCIStr("window_start"),
+		//      UniqueID: plan4Agg.ctx.GetSessionVars().AllocPlanColumnID(),
+		//  }
+		//  winEndCol := &expression.Column{
+		//      ColName:  model.NewCIStr("window_end"),
+		//      UniqueID: plan4Agg.ctx.GetSessionVars().AllocPlanColumnID(),
+		//  }
+		//  schema4Agg.Columns = append([]*expression.Column{winStartCol, winEndCol}, schema4Agg.Columns...)
+	}
+
 	plan4Agg.SetChildren(p)
 	plan4Agg.GroupByItems = gbyItems
 	plan4Agg.SetSchema(schema4Agg)
 	plan4Agg.collectGroupByColumns()
-	//TODO: Complete here
-	if sw != nil {
-		plan4Agg.AggWindow = &aggregation.AggWindowDesc{Size: sw.Size}
-	}
 
 	return plan4Agg, aggIndexMap, nil
 }
@@ -942,7 +953,8 @@ func (b *PlanBuilder) buildUnion(ctx context.Context, union *ast.UnionStmt) (Log
 	b.handleHelper.pushMap(nil)
 
 	if union.OrderBy != nil {
-		unionPlan, err = b.buildSort(ctx, unionPlan, union.OrderBy.Items, nil, nil)
+		unionPlan, err = b.buildSort(ctx, unionPlan, union.OrderBy.Items, nil, nil, false)
+
 		if err != nil {
 			return nil, err
 		}
@@ -1047,7 +1059,7 @@ func (t *itemTransformer) Leave(inNode ast.Node) (ast.Node, bool) {
 	return inNode, false
 }
 
-func (b *PlanBuilder) buildSort(ctx context.Context, p LogicalPlan, byItems []*ast.ByItem, aggMapper map[*ast.AggregateFuncExpr]int, windowMapper map[*ast.WindowFuncExpr]int) (*LogicalSort, error) {
+func (b *PlanBuilder) buildSort(ctx context.Context, p LogicalPlan, byItems []*ast.ByItem, aggMapper map[*ast.AggregateFuncExpr]int, windowMapper map[*ast.WindowFuncExpr]int, streamWinSort bool) (*LogicalSort, error) {
 	if _, isUnion := p.(*LogicalUnionAll); isUnion {
 		b.curClause = globalOrderByClause
 	} else {
@@ -1069,6 +1081,7 @@ func (b *PlanBuilder) buildSort(ctx context.Context, p LogicalPlan, byItems []*a
 	}
 	sort.ByItems = exprs
 	sort.SetChildren(p)
+	sort.StreamWindowSort = streamWinSort
 	return sort, nil
 }
 
@@ -2229,7 +2242,7 @@ func (b *PlanBuilder) buildSelect(ctx context.Context, sel *ast.SelectStmt) (p L
 	}
 
 	if sel.OrderBy != nil {
-		p, err = b.buildSort(ctx, p, sel.OrderBy.Items, orderMap, windowMapper)
+		p, err = b.buildSort(ctx, p, sel.OrderBy.Items, orderMap, windowMapper, sel.StreamWindowSpec != nil)
 		if err != nil {
 			return nil, err
 		}
@@ -2800,7 +2813,7 @@ func (b *PlanBuilder) buildUpdate(ctx context.Context, update *ast.UpdateStmt) (
 		p = proj
 	}
 	if update.Order != nil {
-		p, err = b.buildSort(ctx, p, update.Order.Items, nil, nil)
+		p, err = b.buildSort(ctx, p, update.Order.Items, nil, nil, false)
 		if err != nil {
 			return nil, err
 		}
@@ -3020,7 +3033,7 @@ func (b *PlanBuilder) buildDelete(ctx context.Context, delete *ast.DeleteStmt) (
 	}
 
 	if delete.Order != nil {
-		p, err = b.buildSort(ctx, p, delete.Order.Items, nil, nil)
+		p, err = b.buildSort(ctx, p, delete.Order.Items, nil, nil, false)
 		if err != nil {
 			return nil, err
 		}

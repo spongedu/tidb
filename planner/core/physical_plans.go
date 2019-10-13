@@ -422,7 +422,8 @@ type PhysicalStreamAgg struct {
 type PhysicalSort struct {
 	basePhysicalPlan
 
-	ByItems []*ByItems
+	ByItems       []*ByItems
+	StreamWinSort bool
 }
 
 // NominalSort asks sort properties for its child. It is a fake operator that will not

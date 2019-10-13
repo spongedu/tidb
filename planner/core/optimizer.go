@@ -50,6 +50,7 @@ const (
 	flagPushDownAgg
 	flagPushDownTopN
 	flagJoinReOrder
+	flagCompleteWindowInfo
 )
 
 var optRuleList = []logicalOptRule{

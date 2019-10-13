@@ -84,6 +84,8 @@ type LogicalPlan interface {
 	// PruneColumns prunes the unused columns.
 	PruneColumns([]*expression.Column) error
 
+	CompleteStreamWindow() []*expression.Column
+
 	// findBestTask converts the logical plan to the physical plan. It's a new interface.
 	// It is called recursively from the parent to the children to create the result physical plan.
 	// Some logical plans will convert the children to the physical plans in different ways, and return the one
@@ -128,6 +130,10 @@ type LogicalPlan interface {
 
 	// SetChild sets the ith child for the plan.
 	SetChild(i int, child LogicalPlan)
+}
+
+func (p *baseLogicalPlan) CompleteStreamWindow() []*expression.Column {
+	return p.children[0].CompleteStreamWindow()
 }
 
 // PhysicalPlan is a tree of the physical operators.

@@ -1147,6 +1147,8 @@ func (b *executorBuilder) buildHashAgg(v *plannercore.PhysicalHashAgg) Executor 
 			defaultVal: e.defaultVal,
 
 			childResult: e.childResult,
+			winCol:      v.StreamWindow.WinColName,
+			winSize:     v.StreamWindow.Size,
 		}
 	}
 
@@ -1268,9 +1270,10 @@ func (b *executorBuilder) buildSort(v *plannercore.PhysicalSort) Executor {
 		return nil
 	}
 	sortExec := SortExec{
-		baseExecutor: newBaseExecutor(b.ctx, v.Schema(), v.ExplainID(), childExec),
-		ByItems:      v.ByItems,
-		schema:       v.Schema(),
+		baseExecutor:     newBaseExecutor(b.ctx, v.Schema(), v.ExplainID(), childExec),
+		ByItems:          v.ByItems,
+		schema:           v.Schema(),
+		streamWindowSort: v.StreamWinSort,
 	}
 	executorCounterSortExec.Inc()
 	return &sortExec

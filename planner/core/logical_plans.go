@@ -747,7 +747,8 @@ type LogicalUnionAll struct {
 type LogicalSort struct {
 	baseLogicalPlan
 
-	ByItems []*ByItems
+	ByItems          []*ByItems
+	StreamWindowSort bool
 }
 
 func (ls *LogicalSort) extractCorrelatedCols() []*expression.CorrelatedColumn {
