@@ -66,6 +66,7 @@ const (
 	inCreateOrDropTable
 	// parentIsJoin is set when visiting node's parent is join.
 	parentIsJoin
+	inCreateOrDropStream
 )
 
 // preprocessor is an ast.Visitor that preprocess
@@ -92,6 +93,13 @@ func (p *preprocessor) Enter(in ast.Node) (out ast.Node, skipChildren bool) {
 	case *ast.DropTableStmt:
 		p.flag |= inCreateOrDropTable
 		p.checkDropTableGrammar(node)
+	case *ast.CreateStreamStmt:
+		p.flag |= inCreateOrDropStream
+		p.checkCreateStreamGrammar(node)
+	case *ast.DropStreamStmt:
+		p.flag |= inCreateOrDropStream
+		p.checkDropStreamGrammar(node)
+
 	case *ast.RenameTableStmt:
 		p.flag |= inCreateOrDropTable
 		p.checkRenameTableGrammar(node)
@@ -125,6 +133,31 @@ func (p *preprocessor) Enter(in ast.Node) (out ast.Node, skipChildren bool) {
 		p.flag &= ^parentIsJoin
 	}
 	return in, p.err != nil
+}
+
+func (p *preprocessor) checkCreateStreamGrammar(stmt *ast.CreateStreamStmt) {
+	streamName := stmt.StreamName.Name.String()
+	if isIncorrectName(streamName) {
+		p.err = ddl.ErrWrongTableName.GenWithStackByArgs(streamName)
+		return
+	}
+	for _, colDef := range stmt.Cols {
+		if err := checkColumn(colDef); err != nil {
+			p.err = errors.Trace(err)
+			return
+		}
+	}
+	if len(stmt.Cols) == 0 {
+		p.err = ddl.ErrTableMustHaveColumns
+		return
+	}
+}
+
+func (p *preprocessor) checkDropStreamGrammar(stmt *ast.DropStreamStmt) {
+	if isIncorrectName(stmt.StreamName.Name.String()) {
+		p.err = ddl.ErrWrongTableName.GenWithStackByArgs(stmt.StreamName.Name.String())
+		return
+	}
 }
 
 func (p *preprocessor) checkBindGrammar(createBindingStmt *ast.CreateBindingStmt) {
@@ -710,6 +743,11 @@ func (p *preprocessor) handleTableName(tn *ast.TableName) {
 	}
 	if p.flag&inCreateOrDropTable > 0 {
 		// The table may not exist in create table or drop table statement.
+		// Skip resolving the table to avoid error.
+		return
+	}
+	if p.flag&inCreateOrDropStream > 0 {
+		// The stream may not exist in create table or drop table statement.
 		// Skip resolving the table to avoid error.
 		return
 	}

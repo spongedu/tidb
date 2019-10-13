@@ -82,6 +82,44 @@ func onCreateTable(d *ddlCtx, t *meta.Meta, job *model.Job) (ver int64, _ error)
 	}
 }
 
+func onCreateStream(d *ddlCtx, t *meta.Meta, job *model.Job) (ver int64, _ error) {
+   schemaID := job.SchemaID
+   tbInfo := &model.TableInfo{}
+   if err := job.DecodeArgs(tbInfo); err != nil {
+       // Invalid arguments, cancel this job.
+       job.State = model.JobStateCancelled
+       return ver, errors.Trace(err)
+   }
+
+   tbInfo.State = model.StateNone
+   err := checkTableNotExists(d, t, schemaID, tbInfo.Name.L)
+   if err != nil {
+       return ver, errors.Trace(err)
+   }
+
+   ver, err = updateSchemaVersion(t, job)
+   if err != nil {
+       return ver, errors.Trace(err)
+   }
+
+   switch tbInfo.State {
+   case model.StateNone:
+       // none -> public
+       tbInfo.State = model.StatePublic
+       tbInfo.UpdateTS = t.StartTS
+       err = t.CreateTableOrView(schemaID, tbInfo)
+       if err != nil {
+           return ver, errors.Trace(err)
+       }
+       // Finish this job.
+       job.FinishTableJob(model.JobStateDone, model.StatePublic, ver, tbInfo)
+       asyncNotifyEvent(d, &util.Event{Tp: model.ActionCreateTable, TableInfo: tbInfo})
+       return ver, nil
+   default:
+       return ver, ErrInvalidTableState.GenWithStack("invalid table state %v", tbInfo.State)
+   }
+}
+
 func createTableOrViewWithCheck(t *meta.Meta, job *model.Job, schemaID int64, tbInfo *model.TableInfo) error {
 	err := checkTableInfoValid(tbInfo)
 	if err != nil {
@@ -180,6 +218,63 @@ func onDropTableOrView(t *meta.Meta, job *model.Job) (ver int64, _ error) {
 	}
 
 	return ver, errors.Trace(err)
+}
+
+func onDropStream(t *meta.Meta, job *model.Job) (ver int64, _ error) {
+   schemaID := job.SchemaID
+   tableID := job.TableID
+
+   // Check this table's database.
+   tblInfo, err := t.GetTable(schemaID, tableID)
+   if err != nil {
+       if meta.ErrDBNotExists.Equal(err) {
+           job.State = model.JobStateCancelled
+           return ver, errors.Trace(infoschema.ErrDatabaseNotExists.GenWithStackByArgs(
+               fmt.Sprintf("(Schema ID %d)", schemaID),
+           ))
+       }
+       return ver, errors.Trace(err)
+   }
+
+   // Check the table.
+   if tblInfo == nil || tblInfo.IsStream == false {
+       job.State = model.JobStateCancelled
+       return ver, errors.Trace(infoschema.ErrTableNotExists.GenWithStackByArgs(
+           fmt.Sprintf("(Schema ID %d)", schemaID),
+           fmt.Sprintf("(Table ID %d)", tableID),
+       ))
+   }
+
+   originalState := job.SchemaState
+   switch tblInfo.State {
+   case model.StatePublic:
+       // public -> write only
+       job.SchemaState = model.StateWriteOnly
+       tblInfo.State = model.StateWriteOnly
+       ver, err = updateVersionAndTableInfo(t, job, tblInfo, originalState != tblInfo.State)
+   case model.StateWriteOnly:
+       // write only -> delete only
+       job.SchemaState = model.StateDeleteOnly
+       tblInfo.State = model.StateDeleteOnly
+       ver, err = updateVersionAndTableInfo(t, job, tblInfo, originalState != tblInfo.State)
+   case model.StateDeleteOnly:
+       tblInfo.State = model.StateNone
+       ver, err = updateVersionAndTableInfo(t, job, tblInfo, originalState != tblInfo.State)
+       if err != nil {
+           return ver, errors.Trace(err)
+       }
+       if err = t.DropTableOrView(job.SchemaID, tableID, true); err != nil {
+           break
+       }
+       // Finish this job.
+       job.FinishTableJob(model.JobStateDone, model.StateNone, ver, tblInfo)
+       startKey := tablecodec.EncodeTablePrefix(tableID)
+       job.Args = append(job.Args, startKey, getPartitionIDs(tblInfo))
+   default:
+       err = ErrInvalidTableState.GenWithStack("invalid table state %v", tblInfo.State)
+   }
+
+   return ver, errors.Trace(err)
 }
 
 const (

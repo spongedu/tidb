@@ -374,6 +374,14 @@ func (ds *DataSource) skylinePruning(prop *property.PhysicalProperty) []*candida
 // findBestTask implements the PhysicalPlan interface.
 // It will enumerate all the available indices and choose a plan with least cost.
 func (ds *DataSource) findBestTask(prop *property.PhysicalProperty) (t task, err error) {
+	if ds.tableInfo.IsStream == true {
+		sr := PhysicalStreamReader{}.Init(ds.ctx, ds.blockOffset)
+		sr.SetSchema(ds.schema)
+		sr.stats = &property.StatsInfo{RowCount: 10}
+		t := rootTask{p: sr}
+		return &t, nil
+	}
+
 	// If ds is an inner plan in an IndexJoin, the IndexJoin will generate an inner plan by itself,
 	// and set inner child prop nil, so here we do nothing.
 	if prop == nil {

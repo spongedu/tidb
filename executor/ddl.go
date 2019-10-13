@@ -34,6 +34,7 @@ import (
 	"github.com/pingcap/tidb/util/gcutil"
 	"github.com/pingcap/tidb/util/logutil"
 	"github.com/pingcap/tidb/util/sqlexec"
+	"github.com/prometheus/common/log"
 	"go.uber.org/zap"
 )
 
@@ -82,6 +83,8 @@ func (e *DDLExec) Next(ctx context.Context, req *chunk.Chunk) (err error) {
 		err = e.executeAlterDatabase(x)
 	case *ast.AlterTableStmt:
 		err = e.executeAlterTable(x)
+	case *ast.CreateStreamStmt:
+		err = e.executeCreateStream(x)
 	case *ast.CreateIndexStmt:
 		err = e.executeCreateIndex(x)
 	case *ast.CreateDatabaseStmt:
@@ -96,6 +99,8 @@ func (e *DDLExec) Next(ctx context.Context, req *chunk.Chunk) (err error) {
 		err = e.executeDropDatabase(x)
 	case *ast.DropTableStmt:
 		err = e.executeDropTableOrView(x)
+	case *ast.DropStreamStmt:
+		err = e.executeDropStream(x)
 	case *ast.RecoverTableStmt:
 		err = e.executeRecoverTable(x)
 	case *ast.RenameTableStmt:
@@ -130,6 +135,11 @@ func (e *DDLExec) Next(ctx context.Context, req *chunk.Chunk) (err error) {
 	// DDL will force commit old transaction, after DDL, in transaction status should be false.
 	e.ctx.GetSessionVars().SetStatusFlag(mysql.ServerStatusInTrans, false)
 	return nil
+}
+
+func (e *DDLExec) executeCreateStream(s *ast.CreateStreamStmt) error {
+	err := domain.GetDomain(e.ctx).DDL().CreateStream(e.ctx, s)
+	return errors.Trace(err)
 }
 
 func (e *DDLExec) executeTruncateTable(s *ast.TruncateTableStmt) error {
@@ -255,12 +265,15 @@ func (e *DDLExec) executeDropTableOrView(s *ast.DropTableStmt) error {
 			notExistTables = append(notExistTables, fullti.String())
 			continue
 		}
-		_, err := e.is.TableByName(tn.Schema, tn.Name)
+		tbInfo, err := e.is.TableByName(tn.Schema, tn.Name)
 		if err != nil && infoschema.ErrTableNotExists.Equal(err) {
 			notExistTables = append(notExistTables, fullti.String())
 			continue
 		} else if err != nil {
 			return err
+		} else if tbInfo.Meta().IsStream == true {
+			notExistTables = append(notExistTables, fullti.String())
+			continue
 		}
 
 		// Protect important system table from been dropped by a mistake.
@@ -293,6 +306,53 @@ func (e *DDLExec) executeDropTableOrView(s *ast.DropTableStmt) error {
 		}
 	}
 	if len(notExistTables) > 0 && !s.IfExists {
+		return infoschema.ErrTableDropExists.GenWithStackByArgs(strings.Join(notExistTables, ","))
+	}
+	return nil
+}
+
+func (e *DDLExec) executeDropStream(s *ast.DropStreamStmt) error {
+	var notExistTables []string
+	tn := s.StreamName
+	fullti := ast.Ident{Schema: tn.Schema, Name: tn.Name}
+	_, ok := e.is.SchemaByName(tn.Schema)
+	if !ok {
+		// TODO: we should return special error for table not exist, checking "not exist" is not enough,
+		// because some other errors may contain this error string too.
+		notExistTables = append(notExistTables, fullti.String())
+	} else {
+		tbInfo, err := e.is.TableByName(tn.Schema, tn.Name)
+		if err != nil && infoschema.ErrTableNotExists.Equal(err) {
+			notExistTables = append(notExistTables, fullti.String())
+		} else if err != nil {
+			return errors.Trace(err)
+		} else if tbInfo.Meta().IsStream == false {
+			notExistTables = append(notExistTables, fullti.String())
+		}
+	}
+
+	// Protect important system table from been dropped by a mistake.
+	// I can hardly find a case that a user really need to do this.
+	if isSystemTable(tn.Schema.L, tn.Name.L) {
+		return errors.Errorf("Drop tidb system table '%s.%s' is forbidden", tn.Schema.L, tn.Name.L)
+	}
+
+	if config.CheckTableBeforeDrop {
+		log.Warnf("admin check table `%s`.`%s` before drop.", fullti.Schema.O, fullti.Name.O)
+		sql := fmt.Sprintf("admin check table `%s`.`%s`", fullti.Schema.O, fullti.Name.O)
+		_, _, err := e.ctx.(sqlexec.RestrictedSQLExecutor).ExecRestrictedSQL(sql)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+
+	err := domain.GetDomain(e.ctx).DDL().DropStream(e.ctx, fullti)
+	if infoschema.ErrDatabaseNotExists.Equal(err) || infoschema.ErrTableNotExists.Equal(err) {
+		notExistTables = append(notExistTables, fullti.String())
+	} else if err != nil {
+		return errors.Trace(err)
+	}
+	if len(notExistTables) > 0 {
 		return infoschema.ErrTableDropExists.GenWithStackByArgs(strings.Join(notExistTables, ","))
 	}
 	return nil

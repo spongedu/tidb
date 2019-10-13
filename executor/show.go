@@ -141,7 +141,9 @@ func (e *ShowExec) fetchAll(ctx context.Context) error {
 	case ast.ShowStatus:
 		return e.fetchShowStatus()
 	case ast.ShowTables:
-		return e.fetchShowTables()
+		return e.fetchShowTables(false)
+	case ast.ShowStreams:
+		return e.fetchShowTables(true)
 	case ast.ShowOpenTables:
 		return e.fetchShowOpenTables()
 	case ast.ShowTableStatus:
@@ -285,7 +287,7 @@ func (e *ShowExec) fetchShowOpenTables() error {
 	return nil
 }
 
-func (e *ShowExec) fetchShowTables() error {
+func (e *ShowExec) fetchShowTables(showStream bool) error {
 	checker := privilege.GetPrivilegeManager(e.ctx)
 	if checker != nil && e.ctx.GetSessionVars().User != nil {
 		if !checker.DBIsVisible(e.ctx.GetSessionVars().ActiveRoles, e.DBName.O) {
@@ -306,11 +308,19 @@ func (e *ShowExec) fetchShowTables() error {
 			continue
 		}
 		tableNames = append(tableNames, v.Meta().Name.O)
-		if v.Meta().IsView() {
-			tableTypes[v.Meta().Name.O] = "VIEW"
+		if showStream == true {
+			if v.Meta().IsStream == true {
+				tableNames = append(tableNames, v.Meta().Name.O)
+			}
+
 		} else {
-			tableTypes[v.Meta().Name.O] = "BASE TABLE"
+			if v.Meta().IsView() {
+				tableTypes[v.Meta().Name.O] = "VIEW"
+			} else {
+				tableTypes[v.Meta().Name.O] = "BASE TABLE"
+			}
 		}
+
 	}
 	sort.Strings(tableNames)
 	for _, v := range tableNames {

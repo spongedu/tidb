@@ -87,6 +87,9 @@ const (
 	TypeTableReader = "TableReader"
 	// TypeIndexReader is the type of IndexReader.
 	TypeIndexReader = "IndexReader"
+	// TypeStreamReader is the type of TableReader.
+	TypeStreamReader = "StreamReader"
+
 	// TypeWindow is the type of Window.
 	TypeWindow = "Window"
 	// TypeTableGather is the type of TableGather.
@@ -101,6 +104,11 @@ const (
 func (la LogicalAggregation) Init(ctx sessionctx.Context, offset int) *LogicalAggregation {
 	la.baseLogicalPlan = newBaseLogicalPlan(ctx, TypeAgg, &la, offset)
 	return &la
+}
+
+func (p PhysicalStreamReader) Init(ctx sessionctx.Context, offset int) *PhysicalStreamReader {
+	p.basePhysicalPlan = newBasePhysicalPlan(ctx, TypeStreamReader, &p, offset)
+	return &p
 }
 
 // Init initializes LogicalJoin.

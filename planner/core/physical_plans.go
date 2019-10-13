@@ -53,7 +53,13 @@ var (
 	_ PhysicalPlan = &PhysicalUnionScan{}
 	_ PhysicalPlan = &PhysicalWindow{}
 	_ PhysicalPlan = &BatchPointGetPlan{}
+	_ PhysicalPlan = &PhysicalStreamReader{}
 )
+
+// PhysicalStreamReader is the table reader in tidb.
+type PhysicalStreamReader struct {
+	physicalSchemaProducer
+}
 
 // PhysicalTableReader is the table reader in tidb.
 type PhysicalTableReader struct {
