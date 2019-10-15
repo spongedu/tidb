@@ -26,6 +26,12 @@ import (
 
 const (
 	tableNameEventsStatementsSummaryByDigest = "events_statements_summary_by_digest"
+	tableNameCpuProfile                      = "events_cpu_profile"
+	tableNameMemoryProfile                   = "events_memory_profile"
+	tableNameMutexProfile                    = "events_mutex_profile"
+	tableNameAllocsProfile                   = "events_allocs_profile"
+	tableNameBlockProfile                    = "events_block_profile"
+	tableNameGoroutines                      = "events_goroutines"
 )
 
 // perfSchemaTable stands for the fake table all its data is in the memory.
@@ -90,6 +96,21 @@ func (vt *perfSchemaTable) getRows(ctx sessionctx.Context, cols []*table.Column)
 	switch vt.meta.Name.O {
 	case tableNameEventsStatementsSummaryByDigest:
 		fullRows = stmtsummary.StmtSummaryByDigestMap.ToDatum()
+	case tableNameCpuProfile:
+		fullRows, err = cpuProfileGraph()
+	case tableNameMemoryProfile:
+		fullRows, err = profileGraph("heap")
+	case tableNameMutexProfile:
+		fullRows, err = profileGraph("mutex")
+	case tableNameAllocsProfile:
+		fullRows, err = profileGraph("allocs")
+	case tableNameBlockProfile:
+		fullRows, err = profileGraph("block")
+	case tableNameGoroutines:
+		fullRows, err = goroutinesList()
+	}
+	if err != nil {
+		return
 	}
 	if len(cols) == len(vt.cols) {
 		return
