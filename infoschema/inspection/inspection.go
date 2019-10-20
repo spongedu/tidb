@@ -8,6 +8,7 @@ import (
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb/domain"
+	"github.com/pingcap/tidb/util/sqlexec"
 
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb/sessionctx"
@@ -41,7 +42,7 @@ func (i *InspectionHelper) CreateInspectionDB() error {
 
 func (i *InspectionHelper) CreateInspectionTables() error {
 	// Create inspection tables
-	for _, template := range inspectionTables {
+	for _, template := range inspectionVirtualTables {
 		sql := fmt.Sprintf(template, i.dbName)
 		stmt, err := i.p.ParseOneStmt(sql, "", "")
 		if err != nil {
@@ -56,8 +57,35 @@ func (i *InspectionHelper) CreateInspectionTables() error {
 			return err
 		}
 	}
+
+
+	for _, template := range inspectionPersistTables {
+		sql := fmt.Sprintf(template, i.dbName)
+		stmt, err := i.p.ParseOneStmt(sql, "", "")
+		if err != nil {
+			return err
+		}
+		s, ok := stmt.(*ast.CreateTableStmt)
+		if !ok {
+			return errors.New(fmt.Sprintf("Fail to create inspection table. Maybe create table statment is illegal: %s", sql))
+		}
+		if err := domain.GetDomain(i.ctx).DDL().CreateTable(i.ctx, s); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
+
+func (i *InspectionHelper) TestWriteTable() error {
+	sql := fmt.Sprintf("insert into %s.test_persist values (1,1), (2,2);", i.dbName)
+	_, _, err := i.ctx.(sqlexec.RestrictedSQLExecutor).ExecRestrictedSQL(sql)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 
 /* TODO: The Following are inspection tables. They should be memtable like information schemas
 func tableFromMeta(alloc autoid.Allocator, meta *model.TableInfo) (table.Table, error) {
