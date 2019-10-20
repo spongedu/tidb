@@ -80,7 +80,7 @@ require (
 	sourcegraph.com/sourcegraph/appdash-data v0.0.0-20151005221446-73f23eafcf67
 )
 
-replace github.com/pingcap/parser => github.com/spongedu/parser v0.0.0-20191017163538-da007a565e9b
+replace github.com/pingcap/parser => github.com/qiuyesuifeng/parser v0.0.0-20191020022428-da22dda430af
 
 replace github.com/google/pprof => github.com/lonng/pprof v0.0.0-20191012154247-04dfd648ce8d
 
