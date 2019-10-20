@@ -79,6 +79,16 @@ type ServerVersionInfo struct {
 	GitHash string `json:"git_hash"`
 }
 
+type ClusterItemInfo struct {
+	ID      string `json:"id"`
+	Type    string `json:"type"`
+	Name    string `json:"name"`
+	Address string `json:"address"`
+	Version string `json:"version"`
+	GitHash string `json:"git_hash"`
+	Config  string `json:"config"`
+}
+
 var globalInfoSyncer *InfoSyncer
 
 // GlobalInfoSyncerInit return a new InfoSyncer. It is exported for testing.
