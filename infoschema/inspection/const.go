@@ -13,11 +13,18 @@
 
 package inspection
 
-var inspectionTables = []string{
+var inspectionVirtualTables = []string{
 	tableTest,
 }
 
-const tableTest = "CREATE TABLE %s.test_table(" +
+const tableTest = "CREATE TABLE %s.test_virtual(" +
 	"click_id bigint(20)," +
 	"user_id bigint(20));"
 
+var inspectionPersistTables = []string{
+	tablePersistTest,
+}
+
+const tablePersistTest = "CREATE TABLE %s.test_persist(" +
+	"click_id bigint(20)," +
+	"user_id bigint(20));"
