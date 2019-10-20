@@ -1,29 +1,35 @@
 package inspection
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
+	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
-	"github.com/pingcap/tidb/domain"
-
 	"github.com/pingcap/parser/model"
+	// "github.com/pingcap/parser/mysql"
+	// "github.com/pingcap/tidb/ddl"
+	"github.com/pingcap/tidb/domain"
+	// "github.com/pingcap/tidb/infoschema"
+	// "github.com/pingcap/tidb/kv"
+	// "github.com/pingcap/tidb/meta/autoid"
 	"github.com/pingcap/tidb/sessionctx"
+	// "github.com/pingcap/tidb/table"
+	// "github.com/pingcap/tidb/types"
 )
 
-func NewInspectionHelper (ctx sessionctx.Context) *InspectionHelper {
+func NewInspectionHelper(ctx sessionctx.Context) *InspectionHelper {
 	return &InspectionHelper{
-		ctx: ctx,
-		p: parser.New(),
-		dbName: fmt.Sprintf("%s_%s", "tidb_inspection",time.Now().Format("20060102150405")),
+		ctx:    ctx,
+		p:      parser.New(),
+		dbName: fmt.Sprintf("%s_%s", "tidb_inspection", time.Now().Format("20060102150405")),
 	}
 }
 
 type InspectionHelper struct {
-	ctx sessionctx.Context
-	p *parser.Parser
+	ctx    sessionctx.Context
+	p      *parser.Parser
 	dbName string
 }
 
@@ -34,7 +40,7 @@ func (i *InspectionHelper) GetDBName() string {
 func (i *InspectionHelper) CreateInspectionDB() error {
 	err := domain.GetDomain(i.ctx).DDL().CreateSchema(i.ctx, model.NewCIStr(i.dbName), nil)
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 	return nil
 }
@@ -45,21 +51,23 @@ func (i *InspectionHelper) CreateInspectionTables() error {
 		sql := fmt.Sprintf(template, i.dbName)
 		stmt, err := i.p.ParseOneStmt(sql, "", "")
 		if err != nil {
-			return err
+			return errors.Trace(err)
 		}
+
 		s, ok := stmt.(*ast.CreateTableStmt)
 		if !ok {
 			return errors.New(fmt.Sprintf("Fail to create inspection table. Maybe create table statment is illegal: %s", sql))
 		}
-		s.Table.TableInfo = &model.TableInfo{IsInspection:true, InspectionInfo: make(map[string]string)}
+		s.Table.TableInfo = &model.TableInfo{IsInspection: true, InspectionInfo: make(map[string]string)}
 		if err := domain.GetDomain(i.ctx).DDL().CreateTable(i.ctx, s); err != nil {
-			return err
+			return errors.Trace(err)
 		}
 	}
+
 	return nil
 }
 
-/* TODO: The Following are inspection tables. They should be memtable like information schemas
+/*
 func tableFromMeta(alloc autoid.Allocator, meta *model.TableInfo) (table.Table, error) {
 	return createInspectionTable(meta), nil
 }
@@ -128,6 +136,7 @@ func (vt *inspectTable) getRows(ctx sessionctx.Context, cols []*table.Column) (f
 	// if len(cols) == len(vt.cols) {
 	// 	return
 	// }
+
 	rows := make([][]types.Datum, len(fullRows))
 	for i, fullRow := range fullRows {
 		row := make([]types.Datum, len(cols))
@@ -161,4 +170,4 @@ func (vt *inspectTable) IterRecords(ctx sessionctx.Context, startKey kv.Key, col
 	return nil
 }
 
- */
+*/
