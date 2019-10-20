@@ -13,7 +13,7 @@
 
 package inspection
 
-var inspectionTables = []string{
+var inspectionVirtualTables = []string{
 	tableTest,
 	tableTiDBClusterInfo,
 	tableSystemInfo,
@@ -25,7 +25,7 @@ var inspectionTables = []string{
 	tableTiKVErrorInfo,
 }
 
-const tableTest = "CREATE TABLE %s.test_table(" +
+const tableTest = "CREATE TABLE %s.test_virtual(" +
 	"click_id bigint(20)," +
 	"user_id bigint(20));"
 
@@ -127,3 +127,11 @@ const tableTiKVErrorInfo = `CREATE TABLE %s.TIKV_ERROR_INFO (
   ERR_GRPC_COUNT bigint(21) unsigned DEFAULT NULL,
   ERR_CHANNEL_IS_FULL_COUNT bigint(21) unsigned DEFAULT NULL
 )`
+
+var inspectionPersistTables = []string{
+	tablePersistTest,
+}
+
+const tablePersistTest = "CREATE TABLE %s.test_persist(" +
+	"click_id bigint(20)," +
+	"user_id bigint(20));"

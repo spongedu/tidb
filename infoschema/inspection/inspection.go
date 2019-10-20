@@ -8,13 +8,15 @@ import (
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
+	"github.com/pingcap/tidb/domain"
+	"github.com/pingcap/tidb/sessionctx"
+	"github.com/pingcap/tidb/util/sqlexec"
 	// "github.com/pingcap/parser/mysql"
 	// "github.com/pingcap/tidb/ddl"
-	"github.com/pingcap/tidb/domain"
+	// "github.com/pingcap/tidb/domain"
 	// "github.com/pingcap/tidb/infoschema"
 	// "github.com/pingcap/tidb/kv"
 	// "github.com/pingcap/tidb/meta/autoid"
-	"github.com/pingcap/tidb/sessionctx"
 	// "github.com/pingcap/tidb/table"
 	// "github.com/pingcap/tidb/types"
 )
@@ -23,7 +25,7 @@ func NewInspectionHelper(ctx sessionctx.Context) *InspectionHelper {
 	return &InspectionHelper{
 		ctx:    ctx,
 		p:      parser.New(),
-		dbName: fmt.Sprintf("%s_%s", "tidb_inspection", time.Now().Format("20060102150405")),
+		dbName: fmt.Sprintf("%s_%s", "TIDB_INSPECTION", time.Now().Format("20060102150405")),
 	}
 }
 
@@ -47,8 +49,8 @@ func (i *InspectionHelper) CreateInspectionDB() error {
 
 func (i *InspectionHelper) CreateInspectionTables() error {
 	// Create inspection tables
-	for _, template := range inspectionTables {
-		sql := fmt.Sprintf(template, i.dbName)
+	for _, tbl := range inspectionVirtualTables {
+		sql := fmt.Sprintf(tbl, i.dbName)
 		stmt, err := i.p.ParseOneStmt(sql, "", "")
 		if err != nil {
 			return errors.Trace(err)
@@ -64,10 +66,35 @@ func (i *InspectionHelper) CreateInspectionTables() error {
 		}
 	}
 
+	for _, tbl := range inspectionPersistTables {
+		sql := fmt.Sprintf(tbl, i.dbName)
+		stmt, err := i.p.ParseOneStmt(sql, "", "")
+		if err != nil {
+			return errors.Trace(err)
+		}
+		s, ok := stmt.(*ast.CreateTableStmt)
+		if !ok {
+			return errors.New(fmt.Sprintf("Fail to create inspection table. Maybe create table statment is illegal: %s", sql))
+		}
+		if err := domain.GetDomain(i.ctx).DDL().CreateTable(i.ctx, s); err != nil {
+			return errors.Trace(err)
+		}
+	}
+
 	return nil
 }
 
-/*
+func (i *InspectionHelper) TestWriteTable() error {
+	sql := fmt.Sprintf("insert into %s.test_persist values (1,1), (2,2);", i.dbName)
+	_, _, err := i.ctx.(sqlexec.RestrictedSQLExecutor).ExecRestrictedSQL(sql)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	return nil
+}
+
+/* TODO: The Following are inspection tables. They should be memtable like information schemas
 func tableFromMeta(alloc autoid.Allocator, meta *model.TableInfo) (table.Table, error) {
 	return createInspectionTable(meta), nil
 }
