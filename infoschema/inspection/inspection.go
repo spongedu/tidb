@@ -112,9 +112,9 @@ func (i *InspectionHelper) GetClusterInfo() error {
 	}
 
 	idx := 0
-	for ii, item := range tidbItems {
+	for _, item := range tidbItems {
 		sql := fmt.Sprintf(`insert into %s.TIDB_CLUSTER_INFO values (%d, "tidb", "tidb-%d", "%s:%d", "%s", "%s","");`,
-			i.dbName, idx, ii, item.IP, item.Port, item.Version, item.GitHash)
+			i.dbName, idx, idx, item.IP, item.Port, item.Version, item.GitHash)
 
 		_, _, err := i.ctx.(sqlexec.RestrictedSQLExecutor).ExecRestrictedSQL(sql)
 		if err != nil {
