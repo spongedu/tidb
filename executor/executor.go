@@ -1631,7 +1631,7 @@ func (e *TiDBInspectionExec) Next(ctx context.Context, req *chunk.Chunk) error {
 		return nil
 	}
 
-	// Step 1. Create inspection db
+	// create inspection db
 	idx := int64(0)
 	req.AppendInt64(0, idx)
 	req.AppendString(1, fmt.Sprintf("create inspection database [%s]", e.i.GetDBName()))
@@ -1641,7 +1641,7 @@ func (e *TiDBInspectionExec) Next(ctx context.Context, req *chunk.Chunk) error {
 		req.AppendString(2, "OK")
 	}
 
-	// Step 2. Create inspection table
+	// create inspection tables
 	if err := e.i.CreateInspectionTables(); err != nil {
 		idx++
 		req.AppendInt64(0, idx)
@@ -1656,15 +1656,28 @@ func (e *TiDBInspectionExec) Next(ctx context.Context, req *chunk.Chunk) error {
 		}
 	}
 
-	// Step 3. Fill inspectionPersistTables
+	// fill Test Table
+	/*
+		idx++
+		req.AppendInt64(0, idx)
+		req.AppendString(1, "fill persist tables")
+		if err := e.i.TestWriteTable(); err != nil {
+			req.AppendString(2, err.Error())
+		} else {
+			req.AppendString(2, "OK")
+		}
+	*/
+
+	// fill TIDB_CLUSTER_INFO table
 	idx++
 	req.AppendInt64(0, idx)
-	req.AppendString(1, "fill persist tables")
-	if err := e.i.TestWriteTable(); err != nil {
+	req.AppendString(1, "fill [TIDB_CLUSTER_INFO] table")
+	if err := e.i.GetClusterInfo(); err != nil {
 		req.AppendString(2, err.Error())
 	} else {
 		req.AppendString(2, "OK")
 	}
+
 	e.done = true
 	return nil
 }
