@@ -23,20 +23,26 @@ import (
 
 func NewInspectionHelper(ctx sessionctx.Context) *InspectionHelper {
 	return &InspectionHelper{
-		ctx:    ctx,
-		p:      parser.New(),
-		dbName: fmt.Sprintf("%s_%s", "TIDB_INSPECTION", time.Now().Format("20060102150405")),
+		ctx:        ctx,
+		p:          parser.New(),
+		dbName:     fmt.Sprintf("%s_%s", "TIDB_INSPECTION", time.Now().Format("20060102150405")),
+		tableNames: []string{},
 	}
 }
 
 type InspectionHelper struct {
-	ctx    sessionctx.Context
-	p      *parser.Parser
-	dbName string
+	ctx        sessionctx.Context
+	p          *parser.Parser
+	dbName     string
+	tableNames []string
 }
 
 func (i *InspectionHelper) GetDBName() string {
 	return i.dbName
+}
+
+func (i *InspectionHelper) GetTableNames() []string {
+	return i.tableNames
 }
 
 func (i *InspectionHelper) CreateInspectionDB() error {
@@ -60,10 +66,13 @@ func (i *InspectionHelper) CreateInspectionTables() error {
 		if !ok {
 			return errors.New(fmt.Sprintf("Fail to create inspection table. Maybe create table statment is illegal: %s", sql))
 		}
+
 		s.Table.TableInfo = &model.TableInfo{IsInspection: true, InspectionInfo: make(map[string]string)}
 		if err := domain.GetDomain(i.ctx).DDL().CreateTable(i.ctx, s); err != nil {
 			return errors.Trace(err)
 		}
+
+		i.tableNames = append(i.tableNames, s.Table.Name.O)
 	}
 
 	for _, tbl := range inspectionPersistTables {
@@ -79,6 +88,8 @@ func (i *InspectionHelper) CreateInspectionTables() error {
 		if err := domain.GetDomain(i.ctx).DDL().CreateTable(i.ctx, s); err != nil {
 			return errors.Trace(err)
 		}
+
+		i.tableNames = append(i.tableNames, s.Table.Name.O)
 	}
 
 	return nil
