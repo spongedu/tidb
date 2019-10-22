@@ -170,7 +170,7 @@ func (i *InspectionHelper) GetClusterInfo() error {
 
 		githash := m["git_hash"]
 		sql := fmt.Sprintf(`insert into %s.TIDB_CLUSTER_INFO values (%d, "pd", "pd-%d", "%s","%s", "%s", "%s","%s");`,
-			i.dbName, idx, ii, host, "", version, githash, config)
+			i.dbName, idx, ii, host, host, version, githash, config)
 
 		_, _, err = i.ctx.(sqlexec.RestrictedSQLExecutor).ExecRestrictedSQL(sql)
 		if err != nil {
