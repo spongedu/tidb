@@ -113,8 +113,8 @@ func (i *InspectionHelper) GetClusterInfo() error {
 
 	idx := 0
 	for _, item := range tidbItems {
-		sql := fmt.Sprintf(`insert into %s.TIDB_CLUSTER_INFO values (%d, "tidb", "tidb-%d", "%s:%d", "%s", "%s","");`,
-			i.dbName, idx, idx, item.IP, item.Port, item.Version, item.GitHash)
+		sql := fmt.Sprintf(`insert into %s.TIDB_CLUSTER_INFO values (%d, "tidb", "tidb-%d", "%s:%d", "%s", "%s", "%s","");`,
+			i.dbName, idx, idx, item.IP, item.Port, "", item.Version, item.GitHash)
 
 		_, _, err := i.ctx.(sqlexec.RestrictedSQLExecutor).ExecRestrictedSQL(sql)
 		if err != nil {
@@ -167,8 +167,8 @@ func (i *InspectionHelper) GetClusterInfo() error {
 		}
 
 		githash := m["git_hash"]
-		sql := fmt.Sprintf(`insert into %s.TIDB_CLUSTER_INFO values (%d, "pd", "pd-%d", "%s", "%s", "%s","%s");`,
-			i.dbName, idx, ii, host, version, githash, config)
+		sql := fmt.Sprintf(`insert into %s.TIDB_CLUSTER_INFO values (%d, "pd", "pd-%d", "%s","%s", "%s", "%s","%s");`,
+			i.dbName, idx, ii, host, "", version, githash, config)
 
 		_, _, err = i.ctx.(sqlexec.RestrictedSQLExecutor).ExecRestrictedSQL(sql)
 		if err != nil {
@@ -184,8 +184,8 @@ func (i *InspectionHelper) GetClusterInfo() error {
 		return errors.Trace(err)
 	}
 	for ii, storeStat := range storesStat.Stores {
-		sql := fmt.Sprintf(`insert into %s.TIDB_CLUSTER_INFO values (%d, "tikv", "tikv-%d", "%s", "%s", "%s","");`,
-			i.dbName, idx, ii, storeStat.Store.Address, storeStat.Store.Version, "")
+		sql := fmt.Sprintf(`insert into %s.TIDB_CLUSTER_INFO values (%d, "tikv", "tikv-%d", "%s", "%s", "%s", "%s","");`,
+			i.dbName, idx, ii, storeStat.Store.Address, storeStat.Store.StatusAddress, storeStat.Store.Version, storeStat.Store.GitHash)
 
 		_, _, err := i.ctx.(sqlexec.RestrictedSQLExecutor).ExecRestrictedSQL(sql)
 		if err != nil {
