@@ -366,6 +366,9 @@ type ddlResignOwnerHandler struct {
 	store kv.Storage
 }
 
+type serverConfigHandler struct {
+}
+
 type serverInfoHandler struct {
 	*tikvHandlerTool
 }
@@ -1449,6 +1452,12 @@ func (h *mvccTxnHandler) handleMvccGetByTxn(params map[string]string) (interface
 type serverInfo struct {
 	IsOwner bool `json:"is_owner"`
 	*infosync.ServerInfo
+}
+
+// ServeHTTP handles request of server config info.
+func (h serverConfigHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	conf := config.GetGlobalConfig()
+	writeData(w, conf)
 }
 
 // ServeHTTP handles request of ddl server info.
