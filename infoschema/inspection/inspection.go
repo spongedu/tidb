@@ -129,13 +129,14 @@ func (i *InspectionHelper) GetClusterInfo() error {
 
 	idx := 0
 	for _, item := range tidbItems {
-		tidbStatusAddr := fmt.Sprintf("%s:%d", item.IP, item.StatusPort)
-		tidbConfig := fmt.Sprintf("http://%s/config", tidbStatusAddr)
 		tp := "tidb"
 		name := fmt.Sprintf("tidb-%d", idx)
+		tidbAddr := fmt.Sprintf("%s:%d", item.IP, item.Port)
+		tidbStatusAddr := fmt.Sprintf("%s:%d", item.IP, item.StatusPort)
+		tidbConfig := fmt.Sprintf("http://%s/config", tidbStatusAddr)
 
 		sql := fmt.Sprintf(`insert into %s.TIDB_CLUSTER_INFO values (%d, "%s", "%s", "%s", "%s", "%s", "%s", "%s");`,
-			i.dbName, idx, tp, name, tidbStatusAddr, item.Version, item.GitHash, tidbConfig)
+			i.dbName, idx, tp, name, tidbAddr, tidbStatusAddr, item.Version, item.GitHash, tidbConfig)
 
 		_, _, err := i.ctx.(sqlexec.RestrictedSQLExecutor).ExecRestrictedSQL(sql)
 		if err != nil {
@@ -210,9 +211,9 @@ func (i *InspectionHelper) GetClusterInfo() error {
 		return errors.Trace(err)
 	}
 	for ii, storeStat := range storesStat.Stores {
-		tikvConfig := fmt.Sprintf("http://%s/config", storeStat.Store.StatusAddress)
 		tp := "tikv"
 		name := fmt.Sprintf("tikv-%d", ii)
+		tikvConfig := fmt.Sprintf("http://%s/config", storeStat.Store.StatusAddress)
 
 		sql := fmt.Sprintf(`insert into %s.TIDB_CLUSTER_INFO values (%d, "%s", "%s", "%s", "%s", "%s", "%s", "%s");`,
 			i.dbName, idx, tp, name, storeStat.Store.Address, storeStat.Store.StatusAddress, storeStat.Store.Version, storeStat.Store.GitHash, tikvConfig)
