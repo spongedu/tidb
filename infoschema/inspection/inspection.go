@@ -256,7 +256,7 @@ func (i *InspectionHelper) initProm() error {
 
 	var err error
 	i.promClient, err = api.NewClient(api.Config{
-		Address: promAddr,
+		Address: fmt.Sprintf("http://%s", promAddr),
 	})
 	if err != nil {
 		return errors.Trace(err)
