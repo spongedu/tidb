@@ -232,7 +232,7 @@ func (i *InspectionHelper) GetClusterInfo() error {
 			return errors.Trace(err)
 		}
 
-		i.items = append(i.items, ClusterItem{int64(idx), tp, name, getIPfromAdress(storeStat.Store.StatusAddress), storeStat.Store.Address})
+		i.items = append(i.items, ClusterItem{int64(idx), tp, name, getIPfromAdress(storeStat.Store.Address), storeStat.Store.Address})
 		idx++
 	}
 

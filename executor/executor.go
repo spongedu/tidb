@@ -1636,17 +1636,14 @@ func (e *TiDBInspectionExec) Next(ctx context.Context, req *chunk.Chunk) error {
 	req.AppendInt64(0, idx)
 	req.AppendString(1, fmt.Sprintf("create inspection database [%s]", e.i.GetDBName()))
 	if err := e.i.CreateInspectionDB(); err != nil {
-		req.AppendString(2, err.Error())
+		return errors.Trace(err)
 	} else {
 		req.AppendString(2, "OK")
 	}
 
 	// create inspection tables
 	if err := e.i.CreateInspectionTables(); err != nil {
-		idx++
-		req.AppendInt64(0, idx)
-		req.AppendString(1, "create inspection tables")
-		req.AppendString(2, err.Error())
+		return errors.Trace(err)
 	} else {
 		for _, table := range e.i.GetTableNames() {
 			idx++
@@ -1673,7 +1670,7 @@ func (e *TiDBInspectionExec) Next(ctx context.Context, req *chunk.Chunk) error {
 	req.AppendInt64(0, idx)
 	req.AppendString(1, "generate [TIDB_CLUSTER_INFO] table")
 	if err := e.i.GetClusterInfo(); err != nil {
-		req.AppendString(2, err.Error())
+		return errors.Trace(err)
 	} else {
 		req.AppendString(2, "OK")
 	}
@@ -1683,7 +1680,7 @@ func (e *TiDBInspectionExec) Next(ctx context.Context, req *chunk.Chunk) error {
 	req.AppendInt64(0, idx)
 	req.AppendString(1, "generate [SYSTEM_INFO] table")
 	if err := e.i.GetSystemInfo(); err != nil {
-		req.AppendString(2, err.Error())
+		return errors.Trace(err)
 	} else {
 		req.AppendString(2, "OK")
 	}
