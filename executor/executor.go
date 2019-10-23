@@ -1668,11 +1668,21 @@ func (e *TiDBInspectionExec) Next(ctx context.Context, req *chunk.Chunk) error {
 		}
 	*/
 
-	// fill TIDB_CLUSTER_INFO table
+	// generate TIDB_CLUSTER_INFO table
 	idx++
 	req.AppendInt64(0, idx)
-	req.AppendString(1, "fill [TIDB_CLUSTER_INFO] table")
+	req.AppendString(1, "generate [TIDB_CLUSTER_INFO] table")
 	if err := e.i.GetClusterInfo(); err != nil {
+		req.AppendString(2, err.Error())
+	} else {
+		req.AppendString(2, "OK")
+	}
+
+	// generate SYSTEM_INFO table
+	idx++
+	req.AppendInt64(0, idx)
+	req.AppendString(1, "generate [SYSTEM_INFO] table")
+	if err := e.i.GetSystemInfo(); err != nil {
 		req.AppendString(2, err.Error())
 	} else {
 		req.AppendString(2, "OK")
