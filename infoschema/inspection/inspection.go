@@ -134,7 +134,7 @@ func (i *InspectionHelper) GetClusterInfo() error {
 		tp := "tidb"
 		name := fmt.Sprintf("tidb-%d", idx)
 
-		sql := fmt.Sprintf(`insert into %s.TIDB_CLUSTER_INFO values (%d, "%s", "%s", "%s:%d", "%s", "%s", "%s", "%s");`,
+		sql := fmt.Sprintf(`insert into %s.TIDB_CLUSTER_INFO values (%d, "%s", "%s", "%s", "%s", "%s", "%s", "%s");`,
 			i.dbName, idx, tp, name, tidbStatusAddr, item.Version, item.GitHash, tidbConfig)
 
 		_, _, err := i.ctx.(sqlexec.RestrictedSQLExecutor).ExecRestrictedSQL(sql)
