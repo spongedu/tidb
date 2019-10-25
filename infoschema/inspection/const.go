@@ -13,13 +13,48 @@
 
 package inspection
 
-var inspectionVirtualTables = []string{
-	// tableTest,
+type inspectionVirtualTableItem struct {
+	SQL string
+	Attrs map[string]string
 }
 
-const tableTest = "CREATE TABLE %s.test_virtual(" +
-	"click_id bigint(20)," +
-	"user_id bigint(20));"
+var inspectionVirtualTables = []inspectionVirtualTableItem{
+	{tableLocalLog,
+		map[string]string{
+			"type": "log_tidb_local",
+			"startTime": "2019-10-24T11:35:29",
+			"endTime": "2019-10-24T11:35:47",
+			"limit": "77",
+		},
+	},
+	{tableRemoteLog,
+		map[string]string{
+			"type": "log_tidb_remote",
+			"url": "http://127.0.0.1:10080/log",
+			"startTime": "2019-10-24T11:35:29",
+			"endTime": "2019-10-24T11:35:47",
+			"limit": "5",
+		},
+	},
+}
+
+const tableLocalLog = "CREATE TABLE %s.local_log(" +
+	"host varchar(256)," +
+	"port varchar(256)," +
+	"component varchar(256)," +
+	"filename varchar(256)," +
+	"time timestamp," +
+	"level bigint," +
+	"content text);"
+
+const tableRemoteLog = "CREATE TABLE %s.remote_log(" +
+	"host varchar(256)," +
+	"port varchar(256)," +
+	"component varchar(256)," +
+	"filename varchar(256)," +
+	"time timestamp," +
+	"level bigint," +
+	"content text);"
 
 var inspectionPersistTables = []string{
 	// tablePersistTest,

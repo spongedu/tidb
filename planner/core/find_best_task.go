@@ -408,6 +408,7 @@ func (ds *DataSource) findBestTask(prop *property.PhysicalProperty) (t task, err
 			Columns:     ds.Columns,
 			TableAsName: ds.TableAsName,
 			DBName:      ds.DBName,
+			InspectionTableAttrs: ds.tableInfo.InspectionInfo,
 		}.Init(ds.ctx, ds.blockOffset)
 
 		sr.SetSchema(ds.schema)
