@@ -445,11 +445,8 @@ func (ds *DataSource) findBestTask(prop *property.PhysicalProperty) (t task, err
 								if q.ColName.L == "level" {
 									sr.Table.InspectionInfo["level"] = v.GetArgs()[1].String()
 								}
-								if q.ColName.L == "host" {
-									sr.Table.InspectionInfo["host"] = v.GetArgs()[1].String()
-								}
-								if q.ColName.L == "port" {
-									sr.Table.InspectionInfo["port"] = v.GetArgs()[1].String()
+								if q.ColName.L == "address" {
+									sr.Table.InspectionInfo["addr"] = v.GetArgs()[1].String()
 								}
 								if q.ColName.L == "filename" {
 									sr.Table.InspectionInfo["filename"] = v.GetArgs()[1].String()

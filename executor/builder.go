@@ -49,7 +49,6 @@ import (
 	"github.com/pingcap/tidb/util/stringutil"
 	"github.com/pingcap/tidb/util/timeutil"
 	"github.com/pingcap/tipb/go-tipb"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -262,7 +261,6 @@ func (b *executorBuilder) buildInspectionReader(v *plannercore.PhysicalInspectio
 }
 
 func (b *executorBuilder) buildLocalLogReader(v *plannercore.PhysicalInspectionReader) *LocalLogReaderExecutor {
-	logrus.Infof("ATTRS=%s", v.InspectionTableAttrs)
 	return &LocalLogReaderExecutor{
 		baseExecutor: newBaseExecutor(b.ctx, v.Schema(), v.ExplainID()),
 		Table:        v.Table,
@@ -282,7 +280,10 @@ func (b *executorBuilder) buildRemoteLogReader(v *plannercore.PhysicalInspection
 		endTimeStr: v.InspectionTableAttrs["endTime"],
 		LimitStr: v.InspectionTableAttrs["limit"],
 		url: v.InspectionTableAttrs["url"],
-
+		pattern: v.InspectionTableAttrs["pattern"],
+		level: v.InspectionTableAttrs["level"],
+		address: v.InspectionTableAttrs["address"],
+		filename: v.InspectionTableAttrs["filename"],
 	}
 }
 

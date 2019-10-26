@@ -1612,13 +1612,17 @@ var (
 type LogSequenceWrapper struct {
 	se *search.Sequence
 	pattern string
+	level string
+	filename string
 }
 
 const (
-	LOG_START_TIME = "startTime"
-	LOG_END_TIME = "endTime"
+	LOG_START_TIME = "start_time"
+	LOG_END_TIME = "end_time"
 	LOG_LIMIT = "limit"
 	LOG_PATTERN = "pattern"
+	LOG_LEVEL = "level"
+	LOG_FILENAME = "filename"
 	LOG_FD = "fd"
 )
 
@@ -1669,6 +1673,14 @@ func (r logOpener) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	if s := req.FormValue(LOG_PATTERN); s != "" {
 		wrapper.pattern = s
+	}
+
+	if s := req.FormValue(LOG_LEVEL); s != "" {
+		wrapper.level = s
+	}
+
+	if s := req.FormValue(LOG_FILENAME); s != "" {
+		wrapper.filename = s
 	}
 	logProcessor.Store(fd, wrapper)
 
@@ -1734,6 +1746,12 @@ func (r logReader) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		ok := true
 		if pattern != "" {
 			ok = strings.Contains(string(item.GetContent()), pattern)
+		}
+		if wrapper.level != "" {
+			ok = wrapper.level == log2.ParseLevelToStr(item.GetLevel())
+		}
+		if wrapper.filename != "" {
+			ok = wrapper.filename == item.GetFileName()
 		}
 		if ok {
 			val := &log2.TiDBLogItem{

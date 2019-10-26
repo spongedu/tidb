@@ -46,9 +46,13 @@ type RemoteLogReaderExecutor struct {
 	result *chunk.Chunk
 	cnt int
 	limit int
-	pattern string
 	url string
 	fd string
+
+	pattern string
+	level string
+	address string
+	filename string
 }
 
 func (e *RemoteLogReaderExecutor) Open(ctx context.Context) error {
@@ -74,8 +78,16 @@ func (e *RemoteLogReaderExecutor) Open(ctx context.Context) error {
 	}
 	e.limit = int(l)
 	e.cnt = 0
-	url := fmt.Sprintf("%s/open?startTime=%s&endTime=%s", e.url, e.startTimeStr, e.endTimeStr)
-	logrus.Infof("OpenURL=%s",url)
+	url := fmt.Sprintf("%s/open?start_time=%s&end_time=%s", e.url, e.startTimeStr, e.endTimeStr)
+	if e.pattern != "" {
+		url = fmt.Sprintf("%s&pattern=%s", url, e.pattern)
+	}
+	if e.filename != "" {
+		url = fmt.Sprintf("%s&filename=%s", url, e.filename)
+	}
+	if e.level != "" {
+		url = fmt.Sprintf("%s&level=%s", url, e.level)
+	}
 	resp, err := http.Get(url)
 	if err != nil {
 		return err
@@ -94,7 +106,6 @@ func (e *RemoteLogReaderExecutor) Open(ctx context.Context) error {
 	if !exists {
 		return errors.New("illegal http return. missing field: `fd`")
 	}
-	logrus.Infof("FD=%s",e.fd)
 	return nil
 }
 
@@ -154,7 +165,11 @@ func (e *RemoteLogReaderExecutor) fetchAll() error {
 }
 
 func (e *RemoteLogReaderExecutor) fetchRemoteLog() error {
-	url := fmt.Sprintf("%s/next?fd=%s&limit=%d", e.url, e.fd, e.limit)
+	l := e.result.Capacity()
+	if e.limit - e.cnt < l {
+		 l = e.limit - e.cnt
+	}
+	url := fmt.Sprintf("%s/next?fd=%s&limit=%d", e.url, e.fd, l)
 	logrus.Infof("URL=%s|",url)
 	if e.pattern != "" {
 		url = fmt.Sprintf("%s&pattern=%s", url, e.pattern)
