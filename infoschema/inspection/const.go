@@ -15,14 +15,6 @@ package inspection
 
 var inspectionVirtualTables = []string{
 	tableTest,
-	tableTiDBClusterInfo,
-	tableSystemInfo,
-	tableTiDBKeyMetrcisInfo,
-	tableTiKVKeyMetrcisInfo,
-	tableTiDBPerformanceInfo,
-	tableTiKVPerformanceInfo,
-	tableTiDBErrorInfo,
-	tableTiKVErrorInfo,
 }
 
 const tableTest = "CREATE TABLE %s.test_virtual(" +
@@ -31,6 +23,14 @@ const tableTest = "CREATE TABLE %s.test_virtual(" +
 
 var inspectionPersistTables = []string{
 	tablePersistTest,
+	tableTiDBClusterInfo,
+	tableSystemInfo,
+	tableTiDBKeyMetrcisInfo,
+	tableTiKVKeyMetrcisInfo,
+	tableTiDBPerformanceInfo,
+	tableTiKVPerformanceInfo,
+	tableTiDBErrorInfo,
+	tableTiKVErrorInfo,
 }
 
 const tablePersistTest = "CREATE TABLE %s.test_persist(" +
@@ -42,6 +42,7 @@ const tableTiDBClusterInfo = `CREATE TABLE %s.TIDB_CLUSTER_INFO (
   TYPE varchar(64) DEFAULT NULL,
   NAME varchar(64) DEFAULT NULL,
   ADDRESS varchar(64) DEFAULT NULL,
+  STATUS_ADDRESS varchar(64) DEFAULT NULL,
   VERSION varchar(64) DEFAULT NULL,
   GIT_HASH varchar(64) DEFAULT NULL,
   CONFIG text DEFAULT NULL
