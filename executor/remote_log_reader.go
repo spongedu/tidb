@@ -256,7 +256,7 @@ func (e *RemoteLogReaderExecutor) getData(data *log2.LogItem, tp, host string) (
 		switch col.Name.L {
 		case "address":
 			row = append(row, types.NewStringDatum(host))
-		case "component":
+		case "type":
 			row = append(row, types.NewStringDatum(tp))
 		case "filename":
 			row = append(row, types.NewStringDatum(data.FileName))
