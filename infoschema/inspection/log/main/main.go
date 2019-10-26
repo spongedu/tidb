@@ -2,10 +2,9 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"time"
 
-	"github.com/pingcap/tidb/infoschema/inspection/log"
-	"github.com/pingcap/tidb/infoschema/inspection/log/search"
 	"github.com/sirupsen/logrus"
 )
 
@@ -32,24 +31,33 @@ func main() {
 
 	logrus.Infof("st=%s", startTime)
 	logrus.Infof("et=%s", endTime)
-	se, err := search.NewSequence(log.GetTiDBLogPath(), startTime, endTime)
-	if err != nil {
-		panic(err)
-	}
+	//se, err := search.NewSequence(log.GetTiDBLogPath(), startTime, endTime)
+	//if err != nil {
+	//	panic(err)
+	//}
 
-	cnt := 0
-	for {
-		item, err := se.Next()
-		if err != nil {
-			fmt.Println(err)
-			break
-		}
-		if item != nil {
-			cnt = cnt + 1
-			fmt.Printf("C=%s", string(item.GetContent()))
-		} else {
-			break
-		}
+	//cnt := 0
+	//for {
+	//	item, err := se.Next()
+	//	if err != nil {
+	//		fmt.Println(err)
+	//		break
+	//	}
+	//	if item != nil {
+	//		cnt = cnt + 1
+	//		fmt.Printf("C=%s", string(item.GetContent()))
+	//	} else {
+	//		break
+	//	}
+	//}
+	//fmt.Printf("cnt=%d",cnt)
+
+	dir, err := ioutil.ReadDir("/Users/duchuan.dc/abccba/")
+	if err != nil {
+		panic("error")
 	}
-	fmt.Printf("cnt=%d",cnt)
+	for _, fi := range dir {
+		filename := fi.Name()
+		fmt.Println(filename)
+	}
 }

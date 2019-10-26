@@ -411,7 +411,7 @@ func (i *InspectionHelper) GetSystemInfo() error {
 }
 
 
-func (i *InspectionHelper) CreateLogStreaming() error {
+func (i *InspectionHelper) CreateLogTable() error {
 	sql := fmt.Sprintf(tableClusterLog, i.dbName)
 	stmt, err := i.p.ParseOneStmt(sql, "", "")
 	if err != nil {
