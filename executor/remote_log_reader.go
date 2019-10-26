@@ -28,8 +28,6 @@ import (
 	log2 "github.com/pingcap/tidb/infoschema/inspection/log"
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util/chunk"
-	"github.com/sirupsen/logrus"
-
 	"golang.org/x/net/context"
 )
 
@@ -42,26 +40,28 @@ type RemoteLogReaderExecutor struct {
 	Columns []*model.ColumnInfo
 
 	startTimeStr string
-	endTimeStr string
-	LimitStr string
-	result *chunk.Chunk
-	cnt int
-	limit int
+	endTimeStr   string
+	LimitStr     string
+	result       *chunk.Chunk
+	cnt          int
+	limit        int
 
-	pattern string
-	level string
+	pattern  string
+	level    string
 	filename string
-	nodes string
-	fds []*resultBuffer
+	nodes    string
+	fds      []*resultBuffer
+	address  string
 }
 
 type resultBuffer struct {
 	tp string
-	buffer *log2.TiDBLogBatch
+	//buffer      *log2.TiDBLogBatch
+	buffer      []*log2.LogItem
 	idxInBuffer int
-	valid bool
-	statusAddr string
-	fd string
+	valid       bool
+	statusAddr  string
+	fd          string
 }
 
 func (e *RemoteLogReaderExecutor) Open(ctx context.Context) error {
@@ -73,11 +73,11 @@ func (e *RemoteLogReaderExecutor) Open(ctx context.Context) error {
 	}
 	// startTime, _ := time.ParseInLocation(TimeStampLayout ,"1970-01-01T00:00:00", local)
 	// endTime, _ := time.ParseInLocation(TimeStampLayout , "2030-01-01T00:00:00", local)
-	_, err = time.ParseInLocation(TimeStampLayout ,e.startTimeStr, local)
+	st, err := time.ParseInLocation(TimeStampLayout, e.startTimeStr, local)
 	if err != nil {
 		return err
 	}
-	_, err = time.ParseInLocation(TimeStampLayout , e.endTimeStr, local)
+	et, err := time.ParseInLocation(TimeStampLayout, e.endTimeStr, local)
 	if err != nil {
 		return err
 	}
@@ -88,7 +88,6 @@ func (e *RemoteLogReaderExecutor) Open(ctx context.Context) error {
 	e.limit = int(l)
 	e.cnt = 0
 	nodes := strings.Split(e.nodes, ";")
-	logrus.Infof("NODES=%s", nodes)
 	for _, node := range nodes {
 		if node == "" {
 			continue
@@ -96,13 +95,22 @@ func (e *RemoteLogReaderExecutor) Open(ctx context.Context) error {
 		segments := strings.Split(node, "@")
 		tp := segments[0]
 		statusAddr := segments[1]
-		b := resultBuffer{
-			tp: tp,
-			idxInBuffer: 0,
-			valid: true,
-			statusAddr: statusAddr,
+		if e.address != "" && statusAddr != e.address {
+			continue
 		}
-		url := fmt.Sprintf("http://%s/log/open?start_time=%s&end_time=%s", statusAddr, e.startTimeStr, e.endTimeStr)
+
+		b := resultBuffer{
+			tp:          tp,
+			idxInBuffer: 0,
+			valid:       true,
+			statusAddr:  statusAddr,
+		}
+		var url string
+		if tp == "tidb" {
+			url = fmt.Sprintf("http://%s/log/open?start_time=%s&end_time=%s", statusAddr, e.startTimeStr, e.endTimeStr)
+		} else if tp == "tikv" {
+			url = fmt.Sprintf("http://%s/log/open?start_time=%d&end_time=%d", statusAddr, st.Unix()*1000, et.Unix()*1000)
+		}
 		if e.pattern != "" {
 			url = fmt.Sprintf("%s&pattern=%s", url, e.pattern)
 		}
@@ -191,35 +199,46 @@ func (e *RemoteLogReaderExecutor) fetchAll() error {
 
 func (e *RemoteLogReaderExecutor) fetchRemoteLog() error {
 	l := e.result.Capacity()
-	if e.limit - e.cnt < l {
+	if e.limit-e.cnt < l {
 		l = e.limit - e.cnt
 	}
+	if l > 10 {
+		l = 10
+	}
 	for i := 0; i < l; i++ {
-		var item *log2.TiDBLogItem = nil
-		var idx int = 0
+		var item *log2.LogItem = nil
+		var idx = 0
 		for j, n := range e.fds {
 			if !n.valid {
 				continue
 			}
-			if n.buffer == nil || n.idxInBuffer == n.buffer.Cnt {
-				e.fetchOneNode(n)
+			if n.buffer == nil || n.idxInBuffer == len(n.buffer) {
+				var err error
+				if n.tp == "tidb" {
+					err = e.fetchOneTiDB(n)
+				} else if n.tp == "tikv" {
+					err = e.fetchOneTiKV(n)
+				}
+				if err != nil {
+					return err
+				}
 			}
 			if !n.valid {
 				continue
 			}
 			if item == nil {
-				item = n.buffer.Logs[n.idxInBuffer]
+				item = n.buffer[n.idxInBuffer]
 				idx = j
 			} else {
-				if !item.Time.After(n.buffer.Logs[n.idxInBuffer].Time) {
-					item = n.buffer.Logs[n.idxInBuffer]
+				if n.buffer[n.idxInBuffer].Time < item.Time {
+					item = n.buffer[n.idxInBuffer]
 					idx = j
 				}
 			}
 		}
 		if item != nil {
 			e.fds[idx].idxInBuffer = e.fds[idx].idxInBuffer + 1
-			data, err := e.getData(item, e.fds[idx].tp)
+			data, err := e.getData(item, e.fds[idx].tp, e.fds[idx].statusAddr)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -230,6 +249,103 @@ func (e *RemoteLogReaderExecutor) fetchRemoteLog() error {
 			break
 		}
 	}
+	return nil
+}
+
+func (e *RemoteLogReaderExecutor) getData(data *log2.LogItem, tp, host string) ([]types.Datum, error) {
+	row := make([]types.Datum, 0, len(e.Columns))
+	for _, col := range e.Columns {
+		switch col.Name.L {
+		case "address":
+			row = append(row, types.NewStringDatum(host))
+		case "component":
+			row = append(row, types.NewStringDatum(tp))
+		case "filename":
+			row = append(row, types.NewStringDatum(data.FileName))
+		case "time":
+			tm := types.Time{
+				Time: types.FromGoTime(time.Unix(data.Time/1000, 0)),
+				Type: mysql.TypeDatetime,
+				Fsp:  0,
+			}
+			row = append(row, types.NewTimeDatum(tm))
+		case "level":
+			row = append(row, types.NewStringDatum(data.Level))
+		case "content":
+			row = append(row, types.NewStringDatum(data.Content))
+		default:
+			data := types.NewDatum(nil)
+			row = append(row, data)
+		}
+	}
+	return row, nil
+}
+
+func (e *RemoteLogReaderExecutor) fetchOneTiDB(r *resultBuffer) error {
+	l := e.result.Capacity()
+	if e.limit-e.cnt < l {
+		l = e.limit - e.cnt
+	}
+	url := fmt.Sprintf("http://%s/log/next?fd=%s&limit=%d", r.statusAddr, r.fd, l)
+	if e.pattern != "" {
+		url = fmt.Sprintf("%s&pattern=%s", url, e.pattern)
+	}
+	resp, err := http.Get(url)
+	if err != nil {
+		r.valid = false
+		return err
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		//logrus.Info("ERR=%s", err)
+		return err
+	}
+	logBatch := &log2.TiDBLogBatch{}
+	if err := json.Unmarshal(body, logBatch); err != nil {
+		return err
+	}
+	if logBatch.Cnt == 0 {
+		r.valid = false
+	}
+	r.buffer = logBatch.Logs
+	r.idxInBuffer = 0
+	return nil
+}
+
+func (e *RemoteLogReaderExecutor) fetchOneTiKV(r *resultBuffer) error {
+	l := e.result.Capacity()
+	if e.limit-e.cnt < l {
+		l = e.limit - e.cnt
+	}
+	url := fmt.Sprintf("http://%s/log/next?fd=%s&limit=%d", r.statusAddr, r.fd, l)
+	if e.pattern != "" {
+		url = fmt.Sprintf("%s&pattern=%s", url, e.pattern)
+	}
+	resp, err := http.Get(url)
+	if err != nil {
+		r.valid = false
+		return err
+	}
+	defer resp.Body.Close()
+	//logrus.Infof("URL=%s|", url)
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		//logrus.Info("ERR=%s", err)
+		return err
+	}
+	//logrus.Info("RET=%s", string(body))
+	logBatch := make([]*log2.LogItem, 0, 0)
+	if err := json.Unmarshal(body, &logBatch); err != nil {
+		//logrus.Info("KV_UMA_ERR=%s", err.Error())
+		return err
+	}
+	if len(logBatch) == 0 {
+		r.valid = false
+	}
+	r.buffer = logBatch
+	//logrus.Infof("TiKV_BATCH=%+v|", logBatch)
+	r.idxInBuffer = 0
 	return nil
 }
 
@@ -278,53 +394,25 @@ func (e *RemoteLogReaderExecutor) xxx() error {
 	return nil
 }
 
- */
+*/
 
-func (e *RemoteLogReaderExecutor) getData(data *log2.TiDBLogItem, tp string) ([]types.Datum, error) {
-	row := make([]types.Datum, 0, len(e.Columns))
-	for _, col := range e.Columns {
-		switch col.Name.L {
-		case "address":
-			row = append(row, types.NewStringDatum(data.Address))
-		case "component":
-			row = append(row, types.NewStringDatum(tp))
-		case "filename":
-			row = append(row, types.NewStringDatum(data.FileName))
-		case "time":
-			tm := types.Time{
-				Time: types.FromGoTime(data.Time),
-				Type: mysql.TypeDatetime,
-				Fsp:  0,
-			}
-			row = append(row, types.NewTimeDatum(tm))
-		case "level":
-			row = append(row, types.NewStringDatum(data.Level))
-		case "content":
-			row = append(row, types.NewStringDatum(data.Content))
-		default:
-			data := types.NewDatum(nil)
-			row = append(row, data)
-		}
-	}
-	return row, nil
-}
-
-func (e *RemoteLogReaderExecutor) fetchOneNode(r *resultBuffer) error {
+/*
+func (e *RemoteLogReaderExecutor) xxx() error {
 	l := e.result.Capacity()
 	if e.limit - e.cnt < l {
-		l = e.limit - e.cnt
+		 l = e.limit - e.cnt
 	}
-	url := fmt.Sprintf("http://%s/log/next?fd=%s&limit=%d", r.statusAddr, r.fd, l)
+	url := fmt.Sprintf("http://%s/log/next?fd=%s&limit=%d", e.address, e.fd, l)
+	logrus.Infof("URL=%s|",url)
 	if e.pattern != "" {
 		url = fmt.Sprintf("%s&pattern=%s", url, e.pattern)
 	}
 	resp, err := http.Get(url)
 	if err != nil {
-		r.valid = false
 		return err
 	}
 	defer resp.Body.Close()
-	logrus.Infof("FD=%s", r.fd)
+	logrus.Infof("FD=%s", e.fd)
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		logrus.Info("ERR=%s", err)
@@ -335,10 +423,22 @@ func (e *RemoteLogReaderExecutor) fetchOneNode(r *resultBuffer) error {
 	if err := json.Unmarshal(body, logBatch); err != nil {
 		return err
 	}
-	if logBatch.Cnt == 0 {
-		r.valid = false
+	for _, item := range logBatch.Logs {
+		if e.cnt >= e.limit {
+			break
+		}
+		if item == nil {
+			continue
+		}
+		data, err := e.getData(item)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		row := chunk.MutRowFromDatums(data).ToRow()
+		e.result.AppendRow(row)
+		e.cnt++
 	}
-	r.buffer = logBatch
-	r.idxInBuffer = 0
 	return nil
 }
+
+*/

@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"strings"
 )
 
 // Mapped from a file path, which is in the format
@@ -56,37 +57,40 @@ func ResolveDir(src string) ([]*FileWrapper, error) {
 		//port := config.GetGlobalConfig().Port
 		//folder := src
 		filename := fi.Name()
+		if !strings.Contains(filename, "tidb") {
+			continue
+		}
 		fw := NewFileWrapper(src, "", "", filename)
 		wrappers = append(wrappers, fw)
 		/*
-		host := fi.Name() // {host_ip}
-		if !fi.IsDir() {
-			continue
-		}
-		dirPath := path.Join(src, host)
-		dir, err := ioutil.ReadDir(dirPath)
-		if err != nil {
-			return nil, err
-		}
-		for _, fi := range dir {
-			folder := fi.Name() // {component_name}-{port}
+			host := fi.Name() // {host_ip}
 			if !fi.IsDir() {
 				continue
 			}
-			dirPath := path.Join(dirPath, folder)
+			dirPath := path.Join(src, host)
 			dir, err := ioutil.ReadDir(dirPath)
 			if err != nil {
 				return nil, err
 			}
 			for _, fi := range dir {
-				filename := fi.Name()
-				if fi.IsDir() {
+				folder := fi.Name() // {component_name}-{port}
+				if !fi.IsDir() {
 					continue
 				}
-				fw := NewFileWrapper(src, host, folder, filename)
-				wrappers = append(wrappers, fw)
+				dirPath := path.Join(dirPath, folder)
+				dir, err := ioutil.ReadDir(dirPath)
+				if err != nil {
+					return nil, err
+				}
+				for _, fi := range dir {
+					filename := fi.Name()
+					if fi.IsDir() {
+						continue
+					}
+					fw := NewFileWrapper(src, host, folder, filename)
+					wrappers = append(wrappers, fw)
+				}
 			}
-		}
 		*/
 	}
 	return wrappers, nil

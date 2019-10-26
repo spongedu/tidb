@@ -209,10 +209,14 @@ func (b *executorBuilder) build(p plannercore.Plan) Executor {
 		if s, ok := v.InspectionTableAttrs["q_starttime"]; ok {
 			t, _ := time.ParseInLocation(TimeStampLayout, strings.Split(s, ".")[0], local)
 			v.InspectionTableAttrs["startTime"] = t.Format("2006-01-02T15:04:05")
+		} else {
+			v.InspectionTableAttrs["startTime"] = v.InspectionTableAttrs["default_startTime"]
 		}
 		if s, ok := v.InspectionTableAttrs["q_endtime"]; ok {
 			t, _ := time.ParseInLocation(TimeStampLayout, strings.Split(s, ".")[0], local)
 			v.InspectionTableAttrs["endTime"] = t.Format("2006-01-02T15:04:05")
+		} else {
+			v.InspectionTableAttrs["endTime"] = v.InspectionTableAttrs["default_endTime"]
 		}
 		tp := v.InspectionTableAttrs["type"]
 		switch tp {
@@ -266,8 +270,8 @@ func (b *executorBuilder) buildLocalLogReader(v *plannercore.PhysicalInspectionR
 		Table:        v.Table,
 		Columns:      v.Columns,
 		startTimeStr: v.InspectionTableAttrs["startTime"],
-		endTimeStr: v.InspectionTableAttrs["endTime"],
-		LimitStr: v.InspectionTableAttrs["limit"],
+		endTimeStr:   v.InspectionTableAttrs["endTime"],
+		LimitStr:     v.InspectionTableAttrs["limit"],
 	}
 }
 
@@ -277,12 +281,13 @@ func (b *executorBuilder) buildRemoteLogReader(v *plannercore.PhysicalInspection
 		Table:        v.Table,
 		Columns:      v.Columns,
 		startTimeStr: v.InspectionTableAttrs["startTime"],
-		endTimeStr: v.InspectionTableAttrs["endTime"],
-		LimitStr: v.InspectionTableAttrs["limit"],
-		pattern: v.InspectionTableAttrs["pattern"],
-		level: v.InspectionTableAttrs["level"],
-		nodes: v.InspectionTableAttrs["nodes"],
-		filename: v.InspectionTableAttrs["filename"],
+		endTimeStr:   v.InspectionTableAttrs["endTime"],
+		LimitStr:     v.InspectionTableAttrs["limit"],
+		pattern:      v.InspectionTableAttrs["pattern"],
+		level:        v.InspectionTableAttrs["level"],
+		nodes:        v.InspectionTableAttrs["nodes"],
+		filename:     v.InspectionTableAttrs["filename"],
+		address:      v.InspectionTableAttrs["address"],
 	}
 }
 
@@ -380,7 +385,7 @@ func (b *executorBuilder) buildShowSlow(v *plannercore.ShowSlow) Executor {
 func (b *executorBuilder) buildTiDBInspection(v *plannercore.TiDBInspection) Executor {
 	e := &TiDBInspectionExec{
 		baseExecutor: newBaseExecutor(b.ctx, v.Schema(), v.ExplainID()),
-		done: false,
+		done:         false,
 	}
 	return e
 }

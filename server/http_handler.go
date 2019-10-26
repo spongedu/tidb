@@ -1727,7 +1727,7 @@ func (r logReader) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		pattern = s
 	}
 	ret := log2.TiDBLogBatch{
-		Logs: make([]*log2.TiDBLogItem, 0, 0),
+		Logs: make([]*log2.LogItem, 0, 0),
 		Cnt: 0,
 	}
 	for {
@@ -1754,11 +1754,11 @@ func (r logReader) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			ok = wrapper.filename == item.GetFileName()
 		}
 		if ok {
-			val := &log2.TiDBLogItem{
+			val := &log2.LogItem{
 				Address: fmt.Sprintf("%s:%d",config.GetGlobalConfig().Status.StatusHost, config.GetGlobalConfig().Status.StatusPort),
 				//Component: item.GetComponent(),
 				FileName: item.GetFileName(),
-				Time: item.GetTime(),
+				Time: item.GetTime().Unix()*1000,
 				Level: log2.ParseLevelToStr(item.GetLevel()),
 				Content:string(item.GetContent()),
 			}

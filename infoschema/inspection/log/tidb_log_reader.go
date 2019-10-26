@@ -2,7 +2,6 @@ package log
 
 import (
 	"path"
-	"time"
 
 	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/infoschema/inspection/log/item"
@@ -14,16 +13,16 @@ var (
 	fw          []*parser.FileWrapper
 )
 
-type TiDBLogItem struct {
+type LogItem struct {
 	Address      string      `json:"address"`
 	FileName  string         `json:"file"`
-	Time      time.Time      `json:"time"`
+	Time      int64      		`json:"time"`
 	Level     string 		 `json:"level"`
 	Content   string         `json:"content"`
 }
 
 type TiDBLogBatch struct {
-	Logs []*TiDBLogItem `json:"logs"`
+	Logs []*LogItem `json:"logs"`
 	Cnt  int            `json:"cnt"`
 }
 

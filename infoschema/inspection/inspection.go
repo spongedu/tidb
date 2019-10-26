@@ -103,28 +103,28 @@ func (i *InspectionHelper) CreateInspectionDB() error {
 
 func (i *InspectionHelper) CreateInspectionTables() error {
 	/*
-	// Create inspection virtual tables
-	for _, tbl := range inspectionVirtualTables {
-		sql := fmt.Sprintf(tbl.SQL, i.dbName)
-		stmt, err := i.p.ParseOneStmt(sql, "", "")
-		if err != nil {
-			return errors.Trace(err)
+		// Create inspection virtual tables
+		for _, tbl := range inspectionVirtualTables {
+			sql := fmt.Sprintf(tbl.SQL, i.dbName)
+			stmt, err := i.p.ParseOneStmt(sql, "", "")
+			if err != nil {
+				return errors.Trace(err)
+			}
+
+			s, ok := stmt.(*ast.CreateTableStmt)
+			if !ok {
+				return errors.New(fmt.Sprintf("Fail to create inspection table. Maybe create table statment is illegal: %s", sql))
+			}
+
+			s.Table.TableInfo = &model.TableInfo{IsInspection: true, InspectionInfo: tbl.Attrs}
+			if err := domain.GetDomain(i.ctx).DDL().CreateTable(i.ctx, s); err != nil {
+				return errors.Trace(err)
+			}
+
+			i.tableNames = append(i.tableNames, s.Table.Name.O)
 		}
 
-		s, ok := stmt.(*ast.CreateTableStmt)
-		if !ok {
-			return errors.New(fmt.Sprintf("Fail to create inspection table. Maybe create table statment is illegal: %s", sql))
-		}
-
-		s.Table.TableInfo = &model.TableInfo{IsInspection: true, InspectionInfo: tbl.Attrs}
-		if err := domain.GetDomain(i.ctx).DDL().CreateTable(i.ctx, s); err != nil {
-			return errors.Trace(err)
-		}
-
-		i.tableNames = append(i.tableNames, s.Table.Name.O)
-	}
-
-	 */
+	*/
 
 	// Create inspection persist tables
 	for _, tbl := range inspectionPersistTables {
@@ -840,11 +840,10 @@ func (i *InspectionHelper) CreateLogTable() error {
 	}
 
 	attrs := map[string]string{
-		"type": "log_remote",
-		"address": "127.0.0.1:10080",
-		"startTime": "2009-10-24T11:35:29",
-		"endTime": "2039-10-24T11:35:47",
-		"limit": "10000",
+		"type":      "log_remote",
+		"default_startTime": "2009-10-24T11:35:29",
+		"default_endTime":   "2039-10-24T11:35:47",
+		"limit":     "10000",
 	}
 	nodes := make([]string, 0, 0)
 	for _, statusAddr := range tikv_addresses {
