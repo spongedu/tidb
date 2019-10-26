@@ -147,7 +147,7 @@ func (e *LocalLogReaderExecutor) parseData(data item.Item) ([]types.Datum, error
 		case "address":
 			row = append(row, types.NewStringDatum(fmt.Sprintf("%s:%s", data.GetHost(), data.GetPort())))
 		case "component":
-			row = append(row, types.NewStringDatum(data.GetComponent()))
+			row = append(row, types.NewStringDatum("tidb"))
 		case "filename":
 			row = append(row, types.NewStringDatum(data.GetFileName()))
 		case "time":
