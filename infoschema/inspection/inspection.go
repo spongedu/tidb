@@ -31,7 +31,6 @@ import (
 	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/store/helper"
 	"github.com/pingcap/tidb/store/tikv"
-	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util"
 	"github.com/pingcap/tidb/util/sqlexec"
 	"github.com/prometheus/client_golang/api"
@@ -1020,9 +1019,9 @@ func (i *InspectionHelper) GetTiKVCpuProfileResult() error {
 	return nil
 }
 
-func (i *InspectionHelper) GetSlowQueryLog(metricsStartTime types.Time, initId, txnTs int64) (int64, error) {
+func (i *InspectionHelper) GetSlowQueryLog(metricsStartTime time.Time, initId, txnTs int64) (int64, error) {
 	sql := fmt.Sprintf(`select ADDRESS, CONTENT from %s.CLUSTER_LOG where time > '%s' and content like '%%%d%%';`,
-		i.dbName, metricsStartTime, txnTs)
+		i.dbName, metricsStartTime.Format("2006-01-02 15:04:05.999999"), txnTs)
 	rows, _, err := i.ctx.(sqlexec.RestrictedSQLExecutor).ExecRestrictedSQL(sql)
 	if err != nil {
 		return 0, err
