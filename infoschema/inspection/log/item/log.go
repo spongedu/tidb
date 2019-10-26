@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-const MAX_LOG_SIZE = 1024 * 1024
+const MAX_LOG_SIZE = 1024 * 1024 * 50
 
 // The LogItem struct implements Item interface
 type LogItem struct {

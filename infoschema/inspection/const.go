@@ -14,7 +14,7 @@
 package inspection
 
 type inspectionVirtualTableItem struct {
-	SQL string
+	SQL   string
 	Attrs map[string]string
 }
 
@@ -29,11 +29,10 @@ var inspectionVirtualTables = []inspectionVirtualTableItem{
 	// },
 	{tableClusterLog,
 		map[string]string{
-			"type": "log_remote",
-			"address": "127.0.0.1:10080",
+			"type":      "log_remote",
 			"startTime": "2019-10-24T11:35:29",
-			"endTime": "2019-10-24T11:35:47",
-			"limit": "5",
+			"endTime":   "2019-10-24T11:35:47",
+			"limit":     "5",
 		},
 	},
 }

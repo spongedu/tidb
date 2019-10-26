@@ -418,6 +418,12 @@ func (ds *DataSource) findBestTask(prop *property.PhysicalProperty) (t task, err
 		// access where condition
 		for _, path := range ds.possibleAccessPaths {
 			if path.isTablePath {
+				setStartTIme := false
+				setEndTIme := false
+				setLevel := false
+				setAddress := false
+				setFileName := false
+				setPattern := false
 				tableConds := path.tableFilters
 				for _, cond := range tableConds {
 					switch v := cond.(type) {
@@ -428,6 +434,7 @@ func (ds *DataSource) findBestTask(prop *property.PhysicalProperty) (t task, err
 							case *expression.Column:
 								if q.ColName.L == "time" {
 									sr.Table.InspectionInfo["q_starttime"] = v.GetArgs()[1].String()
+									setStartTIme = true
 								}
 							default:
 							}
@@ -436,6 +443,7 @@ func (ds *DataSource) findBestTask(prop *property.PhysicalProperty) (t task, err
 							case *expression.Column:
 								if q.ColName.L == "time" {
 									sr.Table.InspectionInfo["q_endtime"] = v.GetArgs()[1].String()
+									setEndTIme = true
 								}
 							default:
 							}
@@ -444,11 +452,14 @@ func (ds *DataSource) findBestTask(prop *property.PhysicalProperty) (t task, err
 							case *expression.Column:
 								if q.ColName.L == "level" {
 									sr.Table.InspectionInfo["level"] = v.GetArgs()[1].String()
+									setLevel = true
 								}
 								if q.ColName.L == "address" {
+									setAddress = true
 									sr.Table.InspectionInfo["address"] = v.GetArgs()[1].String()
 								}
 								if q.ColName.L == "filename" {
+									setFileName = true
 									sr.Table.InspectionInfo["filename"] = v.GetArgs()[1].String()
 								}
 							default:
@@ -457,6 +468,7 @@ func (ds *DataSource) findBestTask(prop *property.PhysicalProperty) (t task, err
 							switch q := v.GetArgs()[0].(type) {
 							case *expression.Column:
 								if q.ColName.L == "content" {
+									setPattern = true
 									s := v.GetArgs()[1].String()
 									s = strings.TrimLeft(s, "%")
 									s = strings.TrimRight(s, "%")
@@ -468,6 +480,24 @@ func (ds *DataSource) findBestTask(prop *property.PhysicalProperty) (t task, err
 					default:
 						continue
 					}
+				}
+				if !setStartTIme {
+					delete(sr.Table.InspectionInfo, "q_starttime")
+				}
+				if !setEndTIme {
+					delete(sr.Table.InspectionInfo, "q_endtime")
+				}
+				if !setPattern {
+					delete(sr.Table.InspectionInfo, "pattern")
+				}
+				if !setAddress {
+					delete(sr.Table.InspectionInfo, "address")
+				}
+				if !setFileName {
+					delete(sr.Table.InspectionInfo, "filename")
+				}
+				if !setLevel {
+					delete(sr.Table.InspectionInfo, "level")
 				}
 				if tableConds != nil {
 					tableSel := PhysicalSelection{Conditions: tableConds}.
