@@ -30,7 +30,7 @@ var inspectionVirtualTables = []inspectionVirtualTableItem{
 	{tableRemoteLog,
 		map[string]string{
 			"type": "log_tidb_remote",
-			"url": "http://127.0.0.1:10080/log",
+			"address": "127.0.0.1:10080",
 			"startTime": "2019-10-24T11:35:29",
 			"endTime": "2019-10-24T11:35:47",
 			"limit": "5",

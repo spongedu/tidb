@@ -46,7 +46,6 @@ type RemoteLogReaderExecutor struct {
 	result *chunk.Chunk
 	cnt int
 	limit int
-	url string
 	fd string
 
 	pattern string
@@ -78,7 +77,7 @@ func (e *RemoteLogReaderExecutor) Open(ctx context.Context) error {
 	}
 	e.limit = int(l)
 	e.cnt = 0
-	url := fmt.Sprintf("%s/open?start_time=%s&end_time=%s", e.url, e.startTimeStr, e.endTimeStr)
+	url := fmt.Sprintf("http://%s/log/open?start_time=%s&end_time=%s", e.address, e.startTimeStr, e.endTimeStr)
 	if e.pattern != "" {
 		url = fmt.Sprintf("%s&pattern=%s", url, e.pattern)
 	}
@@ -140,8 +139,7 @@ func (e *RemoteLogReaderExecutor) Next(ctx context.Context, chk *chunk.Chunk) er
 
 // Close implements the Executor Close interface.
 func (e *RemoteLogReaderExecutor) Close() error {
-	/*
-	url := fmt.Sprintf("%s/close?fd=%s", e.url, e.fd)
+	url := fmt.Sprintf("http://%s/log/close?fd=%s", e.address, e.fd)
 	resp, err := http.Get(url)
 	if err != nil {
 		return err
@@ -151,8 +149,6 @@ func (e *RemoteLogReaderExecutor) Close() error {
 	if err != nil {
 		return err
 	}
-
-	 */
 	return nil
 }
 
@@ -169,7 +165,7 @@ func (e *RemoteLogReaderExecutor) fetchRemoteLog() error {
 	if e.limit - e.cnt < l {
 		 l = e.limit - e.cnt
 	}
-	url := fmt.Sprintf("%s/next?fd=%s&limit=%d", e.url, e.fd, l)
+	url := fmt.Sprintf("http://%s/log/next?fd=%s&limit=%d", e.address, e.fd, l)
 	logrus.Infof("URL=%s|",url)
 	if e.pattern != "" {
 		url = fmt.Sprintf("%s&pattern=%s", url, e.pattern)
