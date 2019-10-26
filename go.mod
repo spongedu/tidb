@@ -81,10 +81,10 @@ require (
 	sourcegraph.com/sourcegraph/appdash-data v0.0.0-20151005221446-73f23eafcf67
 )
 
-replace github.com/pingcap/parser => github.com/qiuyesuifeng/parser v0.0.0-20191021151416-e59e7cd448c3
+replace github.com/pingcap/parser => github.com/qiuyesuifeng/parser v0.0.0-20191026030417-f6b1d525be0b
 
-replace github.com/google/pprof => github.com/lonng/pprof v0.0.0-20191012154247-04dfd648ce8d
+replace github.com/google/pprof => github.com/lonng/pprof v0.0.0-20191026025244-8823d81d1ba9
 
-replace github.com/pingcap/kvproto v0.0.0-20190910074005-0e61b6f435c1 => github.com/lonng/kvproto v0.0.0-20191021150746-701437d057b3
+replace github.com/pingcap/kvproto v0.0.0-20190910074005-0e61b6f435c1 => github.com/qiuyesuifeng/kvproto v0.0.0-20191026020845-a46250948fb3
 
 go 1.13
