@@ -39,6 +39,11 @@ import (
 
 const promReadTimeout = 10 * time.Second
 
+var (
+	tidb_addresses []string
+	tikv_addresses []string
+)
+
 func NewInspectionHelper(ctx sessionctx.Context) *InspectionHelper {
 	return &InspectionHelper{
 		ctx:           ctx,
@@ -91,6 +96,7 @@ func (i *InspectionHelper) CreateInspectionDB() error {
 }
 
 func (i *InspectionHelper) CreateInspectionTables() error {
+	/*
 	// Create inspection virtual tables
 	for _, tbl := range inspectionVirtualTables {
 		sql := fmt.Sprintf(tbl.SQL, i.dbName)
@@ -111,6 +117,8 @@ func (i *InspectionHelper) CreateInspectionTables() error {
 
 		i.tableNames = append(i.tableNames, s.Table.Name.O)
 	}
+
+	 */
 
 	// Create inspection persist tables
 	for _, tbl := range inspectionPersistTables {
@@ -151,6 +159,8 @@ func (i *InspectionHelper) GetClusterInfo() error {
 	}
 
 	idx := 0
+	//TODO: FIXME
+	tidb_addresses = make([]string, 0)
 	for _, item := range tidbItems {
 		tp := "tidb"
 		name := fmt.Sprintf("tidb-%d", idx)
@@ -168,6 +178,8 @@ func (i *InspectionHelper) GetClusterInfo() error {
 
 		i.items = append(i.items, ClusterItem{int64(idx), tp, name, item.IP, tidbStatusAddr})
 		idx++
+		//TODO: FIXME
+		tidb_addresses = append(tidb_addresses, tidbStatusAddr)
 	}
 
 	// get pd servers info.
@@ -233,6 +245,8 @@ func (i *InspectionHelper) GetClusterInfo() error {
 	if err != nil {
 		return errors.Trace(err)
 	}
+	//TODO: FIXME
+	tikv_addresses = make([]string, 0)
 	for ii, storeStat := range storesStat.Stores {
 		tp := "tikv"
 		name := fmt.Sprintf("tikv-%d", ii)
@@ -248,6 +262,8 @@ func (i *InspectionHelper) GetClusterInfo() error {
 
 		i.items = append(i.items, ClusterItem{int64(idx), tp, name, getIPfromAdress(storeStat.Store.StatusAddress), storeStat.Store.StatusAddress})
 		idx++
+		//TODO: FIXME
+		tikv_addresses = append(tikv_addresses, storeStat.Store.StatusAddress)
 	}
 
 	i.isInit = true
@@ -794,6 +810,43 @@ func (i *InspectionHelper) GetTiKVPerfornamnceInfo() error {
 			}
 		}
 	}
+	return nil
+}
 
+func (i *InspectionHelper) CreateLogStreaming() error {
+	sql := fmt.Sprintf(tableClusterLog, i.dbName)
+	stmt, err := i.p.ParseOneStmt(sql, "", "")
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	s, ok := stmt.(*ast.CreateTableStmt)
+	if !ok {
+		return errors.New(fmt.Sprintf("Fail to create inspection table. Maybe create table statment is illegal: %s", sql))
+	}
+
+	attrs := map[string]string{
+		"type": "log_remote",
+		"address": "127.0.0.1:10080",
+		"startTime": "2009-10-24T11:35:29",
+		"endTime": "2039-10-24T11:35:47",
+		"limit": "10000",
+	}
+	nodes := make([]string, 0, 0)
+	for _, statusAddr := range tikv_addresses {
+		nodes = append(nodes, fmt.Sprintf("%s@%s", "tikv", statusAddr))
+	}
+	//tidb_addresses = []string{
+	//	"127.0.0.1:10080",
+	//}
+	for _, statusAddr := range tidb_addresses {
+		nodes = append(nodes, fmt.Sprintf("%s@%s", "tidb", statusAddr))
+	}
+	attrs["nodes"] = strings.Join(nodes, ";")
+	s.Table.TableInfo = &model.TableInfo{IsInspection: true, InspectionInfo: attrs}
+	if err := domain.GetDomain(i.ctx).DDL().CreateTable(i.ctx, s); err != nil {
+		return errors.Trace(err)
+	}
+	i.tableNames = append(i.tableNames, s.Table.Name.O)
 	return nil
 }

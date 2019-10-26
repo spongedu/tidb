@@ -216,9 +216,9 @@ func (b *executorBuilder) build(p plannercore.Plan) Executor {
 		}
 		tp := v.InspectionTableAttrs["type"]
 		switch tp {
-		case "log_tidb_local":
+		case "log_local":
 			return b.buildLocalLogReader(v)
-		case "log_tidb_remote":
+		case "log_remote":
 			return b.buildRemoteLogReader(v)
 		default:
 			b.err = ErrUnknownPlan.GenWithStack("Unknown Inspection reader type: %+s", tp)
@@ -281,7 +281,7 @@ func (b *executorBuilder) buildRemoteLogReader(v *plannercore.PhysicalInspection
 		LimitStr: v.InspectionTableAttrs["limit"],
 		pattern: v.InspectionTableAttrs["pattern"],
 		level: v.InspectionTableAttrs["level"],
-		address: v.InspectionTableAttrs["address"],
+		nodes: v.InspectionTableAttrs["nodes"],
 		filename: v.InspectionTableAttrs["filename"],
 	}
 }

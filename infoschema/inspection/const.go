@@ -19,17 +19,17 @@ type inspectionVirtualTableItem struct {
 }
 
 var inspectionVirtualTables = []inspectionVirtualTableItem{
-	{tableLocalLog,
+	// {tableLocalLog,
+	// 	map[string]string{
+	// 		"type": "log_local",
+	// 		"startTime": "2019-10-24T11:35:29",
+	// 		"endTime": "2019-10-24T11:35:47",
+	// 		"limit": "77",
+	// 	},
+	// },
+	{tableClusterLog,
 		map[string]string{
-			"type": "log_tidb_local",
-			"startTime": "2019-10-24T11:35:29",
-			"endTime": "2019-10-24T11:35:47",
-			"limit": "77",
-		},
-	},
-	{tableRemoteLog,
-		map[string]string{
-			"type": "log_tidb_remote",
+			"type": "log_remote",
 			"address": "127.0.0.1:10080",
 			"startTime": "2019-10-24T11:35:29",
 			"endTime": "2019-10-24T11:35:47",
@@ -46,7 +46,7 @@ const tableLocalLog = "CREATE TABLE %s.LOCAL_LOG(" +
 	"LEVEL varchar(10)," +
 	"CONTENT text);"
 
-const tableRemoteLog = "CREATE TABLE %s.REMOTE_LOG(" +
+const tableClusterLog = "CREATE TABLE %s.CLUSTER_LOG(" +
 	"ADDRESS varchar(64)," +
 	"COMPONENT varchar(256)," +
 	"FILENAME varchar(256)," +

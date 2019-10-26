@@ -14,7 +14,6 @@ var (
 
 type TiDBLogItem struct {
 	Address      string      `json:"address"`
-	Component string         `json:"component"`
 	FileName  string         `json:"file"`
 	Time      time.Time      `json:"time"`
 	Level     string 		 `json:"level"`
