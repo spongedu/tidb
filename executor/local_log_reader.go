@@ -21,6 +21,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb/config"
 	log2 "github.com/pingcap/tidb/infoschema/inspection/log"
 	"github.com/pingcap/tidb/infoschema/inspection/log/item"
 	"github.com/pingcap/tidb/infoschema/inspection/log/search"
@@ -145,7 +146,7 @@ func (e *LocalLogReaderExecutor) parseData(data item.Item) ([]types.Datum, error
 	for _, col := range e.Columns {
 		switch col.Name.L {
 		case "address":
-			row = append(row, types.NewStringDatum(fmt.Sprintf("%s:%s", data.GetHost(), data.GetPort())))
+			row = append(row, types.NewStringDatum(fmt.Sprintf("%s:%s", config.GetGlobalConfig().Host, config.GetGlobalConfig().Port)))
 		case "component":
 			row = append(row, types.NewStringDatum("tidb"))
 		case "filename":

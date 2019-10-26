@@ -1,11 +1,9 @@
 package parser
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
-	"strings"
 )
 
 // Mapped from a file path, which is in the format
@@ -25,11 +23,12 @@ func (fw *FileWrapper) Open() (*os.File, error) {
 
 // Return the component name and port it listening on.
 func (fw *FileWrapper) ParseFolderName() (string, string, error) {
-	s := strings.Split(fw.Folder, "-")
-	if len(s) < 2 {
-		return "", "", fmt.Errorf("unexpect folder name: %s", s)
-	}
-	return s[0], s[1], nil
+	//s := strings.Split(fw.Folder, "-")
+	//if len(s) < 2 {
+	//	return "", "", fmt.Errorf("unexpect folder name: %s", s)
+	//}
+	//return s[0], s[1], nil
+	return "", "", nil
 }
 
 func NewFileWrapper(root, host, folder, filename string) *FileWrapper {
@@ -50,6 +49,16 @@ func ResolveDir(src string) ([]*FileWrapper, error) {
 		return nil, err
 	}
 	for _, fi := range dir {
+		if fi.IsDir() {
+			continue
+		}
+		//host := config.GetGlobalConfig().Host
+		//port := config.GetGlobalConfig().Port
+		folder := src
+		filename := fi.Name()
+		fw := NewFileWrapper(src, "", folder, filename)
+		wrappers = append(wrappers, fw)
+		/*
 		host := fi.Name() // {host_ip}
 		if !fi.IsDir() {
 			continue
@@ -78,6 +87,7 @@ func ResolveDir(src string) ([]*FileWrapper, error) {
 				wrappers = append(wrappers, fw)
 			}
 		}
+		*/
 	}
 	return wrappers, nil
 }

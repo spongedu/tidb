@@ -1,8 +1,10 @@
 package log
 
 import (
+	"path"
 	"time"
 
+	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/infoschema/inspection/log/item"
 	"github.com/pingcap/tidb/infoschema/inspection/log/parser"
 )
@@ -30,7 +32,8 @@ func ResetTiDBLogPath(p string) {
 }
 
 func GetTiDBLogPath() string {
-	return tidbLogPath
+	dir, _ := path.Split(config.GetGlobalConfig().Log.File.Filename)
+	return dir
 }
 
 func ParseLevelToStr(level item.LevelType) string {
