@@ -103,6 +103,7 @@ func (i *InspectionHelper) CreateInspectionDB() error {
 
 func (i *InspectionHelper) CreateInspectionTables() error {
 	/*
+<<<<<<< HEAD
 		// Create inspection virtual tables
 		for _, tbl := range inspectionVirtualTables {
 			sql := fmt.Sprintf(tbl.SQL, i.dbName)
@@ -110,21 +111,37 @@ func (i *InspectionHelper) CreateInspectionTables() error {
 			if err != nil {
 				return errors.Trace(err)
 			}
+=======
+	// Create inspection virtual tables
+	for _, tbl := range inspectionVirtualTables {
+		sql := fmt.Sprintf(tbl.SQL, i.dbName)
+		stmt, err := i.p.ParseOneStmt(sql, "", "")
+		if err != nil {
+			return errors.Trace(err)
+		}
+>>>>>>> cui/tiboys/tbssql2.0-duchuan
 
 			s, ok := stmt.(*ast.CreateTableStmt)
 			if !ok {
 				return errors.New(fmt.Sprintf("Fail to create inspection table. Maybe create table statment is illegal: %s", sql))
 			}
 
+<<<<<<< HEAD
 			s.Table.TableInfo = &model.TableInfo{IsInspection: true, InspectionInfo: tbl.Attrs}
 			if err := domain.GetDomain(i.ctx).DDL().CreateTable(i.ctx, s); err != nil {
 				return errors.Trace(err)
 			}
 
 			i.tableNames = append(i.tableNames, s.Table.Name.O)
+=======
+		s.Table.TableInfo = &model.TableInfo{IsInspection: true, InspectionInfo: tbl.Attrs}
+		if err := domain.GetDomain(i.ctx).DDL().CreateTable(i.ctx, s); err != nil {
+			return errors.Trace(err)
+>>>>>>> cui/tiboys/tbssql2.0-duchuan
 		}
 
 	*/
+
 
 	// Create inspection persist tables
 	for _, tbl := range inspectionPersistTables {

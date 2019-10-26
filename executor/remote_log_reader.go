@@ -28,6 +28,7 @@ import (
 	log2 "github.com/pingcap/tidb/infoschema/inspection/log"
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util/chunk"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
 
@@ -297,6 +298,7 @@ func (e *RemoteLogReaderExecutor) fetchOneTiDB(r *resultBuffer) error {
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
+	logrus.Infof("data=%s|", string(body))
 	if err != nil {
 		//logrus.Info("ERR=%s", err)
 		return err
