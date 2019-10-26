@@ -15,6 +15,7 @@ package core
 
 import (
 	"math"
+	"strings"
 
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
@@ -418,6 +419,59 @@ func (ds *DataSource) findBestTask(prop *property.PhysicalProperty) (t task, err
 		for _, path := range ds.possibleAccessPaths {
 			if path.isTablePath {
 				tableConds := path.tableFilters
+				for _, cond := range tableConds {
+					switch v := cond.(type) {
+					case *expression.ScalarFunction:
+						switch v.FuncName.L {
+						case ast.GT, ast.GE:
+							switch q := v.GetArgs()[0].(type) {
+							case *expression.Column:
+								if q.ColName.L == "time" {
+									sr.Table.InspectionInfo["q_starttime"] = v.GetArgs()[1].String()
+								}
+							default:
+							}
+						case ast.LT, ast.LE:
+							switch q := v.GetArgs()[0].(type) {
+							case *expression.Column:
+								if q.ColName.L == "time" {
+									sr.Table.InspectionInfo["q_endtime"] = v.GetArgs()[1].String()
+								}
+							default:
+							}
+						case ast.EQ:
+							switch q := v.GetArgs()[0].(type) {
+							case *expression.Column:
+								if q.ColName.L == "level" {
+									sr.Table.InspectionInfo["level"] = v.GetArgs()[1].String()
+								}
+								if q.ColName.L == "host" {
+									sr.Table.InspectionInfo["host"] = v.GetArgs()[1].String()
+								}
+								if q.ColName.L == "port" {
+									sr.Table.InspectionInfo["port"] = v.GetArgs()[1].String()
+								}
+								if q.ColName.L == "filename" {
+									sr.Table.InspectionInfo["filename"] = v.GetArgs()[1].String()
+								}
+							default:
+							}
+						case ast.Like:
+							switch q := v.GetArgs()[0].(type) {
+							case *expression.Column:
+								if q.ColName.L == "content" {
+									s := v.GetArgs()[1].String()
+									s = strings.TrimLeft(s, "%")
+									s = strings.TrimRight(s, "%")
+									sr.Table.InspectionInfo["pattern"] = s
+								}
+							default:
+							}
+						}
+					default:
+						continue
+					}
+				}
 				if tableConds != nil {
 					tableSel := PhysicalSelection{Conditions: tableConds}.
 						Init(ds.ctx, ds.stats.ScaleByExpectCnt(0), ds.blockOffset)
