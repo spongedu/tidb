@@ -31,8 +31,10 @@ import (
 	"github.com/pingcap/parser/terror"
 	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/domain"
+	"github.com/pingcap/tidb/domain/infosync"
 	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/infoschema"
+	"github.com/pingcap/tidb/infoschema/inspection"
 	"github.com/pingcap/tidb/kv"
 	plannercore "github.com/pingcap/tidb/planner/core"
 	"github.com/pingcap/tidb/sessionctx"
@@ -297,8 +299,7 @@ func (e *ShowDDLExec) Next(ctx context.Context, req *chunk.Chunk) error {
 		}
 	}
 
-	do := domain.GetDomain(e.ctx)
-	serverInfo, err := do.InfoSyncer().GetServerInfoByID(ctx, e.ddlOwnerID)
+	serverInfo, err := infosync.GetServerInfoByID(ctx, e.ddlOwnerID)
 	if err != nil {
 		return err
 	}
@@ -1603,4 +1604,59 @@ func ResetContextOfStmt(ctx sessionctx.Context, s ast.StmtNode) (err error) {
 		vars.StmtCtx.AppendWarning(warn)
 	}
 	return
+}
+
+type TiDBInspectionExec struct {
+	baseExecutor
+	done bool
+	i    *inspection.InspectionHelper
+}
+
+// Open implements the Executor Open interface.
+func (e *TiDBInspectionExec) Open(ctx context.Context) error {
+	if err := e.baseExecutor.Open(ctx); err != nil {
+		return err
+	}
+
+	// dom := domain.GetDomain(e.ctx)
+	// e.result = dom.ShowSlowQuery(e.ShowSlow)
+	e.i = inspection.NewInspectionHelper(e.ctx)
+	return nil
+}
+
+// Next implements the Executor Next interface.
+func (e *TiDBInspectionExec) Next(ctx context.Context, req *chunk.Chunk) error {
+	req.Reset()
+	if e.done {
+		return nil
+	}
+
+	// Step 1. Create inspection db
+	req.AppendInt64(0, 0)
+	req.AppendString(1, "create inspection database")
+	if err := e.i.CreateInspectionDB(); err != nil {
+		req.AppendString(2, err.Error())
+	} else {
+		req.AppendString(2, "finished")
+	}
+
+	// Step 2. Create inspection table
+	req.AppendInt64(0, 1)
+	req.AppendString(1, "create inspection tables")
+	if err := e.i.CreateInspectionTables(); err != nil {
+		req.AppendString(2, err.Error())
+	} else {
+		req.AppendString(2, "finished")
+	}
+
+	// Step 3. Fill inspectionPersistTables
+	req.AppendInt64(0, 2)
+	req.AppendString(1, "fill persist tables")
+	if err := e.i.TestWriteTable(); err != nil {
+		req.AppendString(2, err.Error())
+	} else {
+		req.AppendString(2, "finished")
+	}
+	e.done = true
+	return nil
 }
