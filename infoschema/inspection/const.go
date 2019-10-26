@@ -38,23 +38,21 @@ var inspectionVirtualTables = []inspectionVirtualTableItem{
 	},
 }
 
-const tableLocalLog = "CREATE TABLE %s.local_log(" +
-	"host varchar(256)," +
-	"port varchar(256)," +
-	"component varchar(256)," +
-	"filename varchar(256)," +
-	"time timestamp," +
-	"level bigint," +
-	"content text);"
+const tableLocalLog = "CREATE TABLE %s.LOCAL_LOG(" +
+	"ADDRESS varchar(64)," +
+	"COMPONENT varchar(256)," +
+	"FILENAME varchar(256)," +
+	"TIME timestamp," +
+	"LEVEL varchar(10)," +
+	"CONTENT text);"
 
-const tableRemoteLog = "CREATE TABLE %s.remote_log(" +
-	"host varchar(256)," +
-	"port varchar(256)," +
-	"component varchar(256)," +
-	"filename varchar(256)," +
-	"time timestamp," +
-	"level bigint," +
-	"content text);"
+const tableRemoteLog = "CREATE TABLE %s.REMOTE_LOG(" +
+	"ADDRESS varchar(64)," +
+	"COMPONENT varchar(256)," +
+	"FILENAME varchar(256)," +
+	"TIME timestamp," +
+	"LEVEL varchar(10)," +
+	"CONTENT text);"
 
 var inspectionPersistTables = []string{
 	tablePersistTest,

@@ -1737,12 +1737,11 @@ func (r logReader) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 		if ok {
 			val := &log2.TiDBLogItem{
-				Host: item.GetHost(),
-				Port: item.GetPort(),
+				Address: fmt.Sprintf("%s:%s",item.GetHost(), item.GetPort()),
 				Component: item.GetComponent(),
 				FileName: item.GetFileName(),
 				Time: item.GetTime(),
-				Level: item.GetLevel(),
+				Level: log2.ParseLevelToStr(item.GetLevel()),
 				Content:string(item.GetContent()),
 			}
 			ret.Logs = append(ret.Logs, val)

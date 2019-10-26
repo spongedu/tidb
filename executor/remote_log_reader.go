@@ -197,10 +197,8 @@ func (e *RemoteLogReaderExecutor) getData(data *log2.TiDBLogItem) ([]types.Datum
 	row := make([]types.Datum, 0, len(e.Columns))
 	for _, col := range e.Columns {
 		switch col.Name.L {
-		case "host":
-			row = append(row, types.NewStringDatum(data.Host))
-		case "port":
-			row = append(row, types.NewStringDatum(data.Port))
+		case "address":
+			row = append(row, types.NewStringDatum(data.Address))
 		case "component":
 			row = append(row, types.NewStringDatum(data.Component))
 		case "filename":
@@ -213,7 +211,7 @@ func (e *RemoteLogReaderExecutor) getData(data *log2.TiDBLogItem) ([]types.Datum
 			}
 			row = append(row, types.NewTimeDatum(tm))
 		case "level":
-			row = append(row, types.NewIntDatum(int64(data.Level)))
+			row = append(row, types.NewStringDatum(data.Level))
 		case "content":
 			row = append(row, types.NewStringDatum(data.Content))
 		default:

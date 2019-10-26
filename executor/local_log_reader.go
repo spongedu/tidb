@@ -14,6 +14,7 @@
 package executor
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
@@ -143,10 +144,8 @@ func (e *LocalLogReaderExecutor) parseData(data item.Item) ([]types.Datum, error
 	row := make([]types.Datum, 0, len(e.Columns))
 	for _, col := range e.Columns {
 		switch col.Name.L {
-		case "host":
-			row = append(row, types.NewStringDatum(data.GetHost()))
-		case "port":
-			row = append(row, types.NewStringDatum(data.GetPort()))
+		case "address":
+			row = append(row, types.NewStringDatum(fmt.Sprintf("%s:%s", data.GetHost(), data.GetPort())))
 		case "component":
 			row = append(row, types.NewStringDatum(data.GetComponent()))
 		case "filename":
@@ -159,7 +158,7 @@ func (e *LocalLogReaderExecutor) parseData(data item.Item) ([]types.Datum, error
 			}
 			row = append(row, types.NewTimeDatum(tm))
 		case "level":
-			row = append(row, types.NewIntDatum(int64(data.GetLevel())))
+			row = append(row, types.NewStringDatum(log2.ParseLevelToStr(data.GetLevel())))
 		case "content":
 			row = append(row, types.NewStringDatum(string(data.GetContent())))
 		default:

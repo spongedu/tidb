@@ -13,12 +13,11 @@ var (
 )
 
 type TiDBLogItem struct {
-	Host      string         `json:"host"`
-	Port      string         `json:"port"`
+	Address      string      `json:"address"`
 	Component string         `json:"component"`
 	FileName  string         `json:"file"`
 	Time      time.Time      `json:"time"`
-	Level     item.LevelType `json:"level"`
+	Level     string 		 `json:"level"`
 	Content   string         `json:"content"`
 }
 
@@ -33,4 +32,26 @@ func ResetTiDBLogPath(p string) {
 
 func GetTiDBLogPath() string {
 	return tidbLogPath
+}
+
+func ParseLevelToStr(level item.LevelType) string {
+	if level == item.LevelInvalid {
+		return "invalid"
+	}
+	if level == item.LevelFATAL {
+		return "fatal"
+	}
+	if level == item.LevelERROR {
+		return "error"
+	}
+	if level == item.LevelWARN {
+		return "warn"
+	}
+	if level == item.LevelINFO {
+		return "info"
+	}
+	if level == item.LevelDEBUG {
+		return "debug"
+	}
+	return "unknown"
 }
