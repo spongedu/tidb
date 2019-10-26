@@ -31,6 +31,7 @@ import (
 	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/store/helper"
 	"github.com/pingcap/tidb/store/tikv"
+	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util"
 	"github.com/pingcap/tidb/util/sqlexec"
 	"github.com/prometheus/client_golang/api"
@@ -86,6 +87,10 @@ func (i *InspectionHelper) GetDBName() string {
 
 func (i *InspectionHelper) GetTableNames() []string {
 	return i.tableNames
+}
+
+func (i *InspectionHelper) GetPromClient() api.Client {
+	return i.promClient
 }
 
 func (i *InspectionHelper) CreateInspectionDB() error {
@@ -995,4 +1000,45 @@ func (i *InspectionHelper) CreateClusterLogTable() error {
 
 	i.tableNames = append(i.tableNames, s.Table.Name.O)
 	return nil
+}
+
+func (i *InspectionHelper) GetTiDBCpuProfileResult() error {
+	sql := fmt.Sprintf(`insert into %s.TIDB_CPU_PROFILE select * from performance_schema.events_tidb_cpu_profile;`, i.dbName)
+	_, _, err := i.ctx.(sqlexec.RestrictedSQLExecutor).ExecRestrictedSQL(sql)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (i *InspectionHelper) GetTiKVCpuProfileResult() error {
+	sql := fmt.Sprintf(`insert into %s.TIKV_CPU_PROFILE select * from performance_schema.events_tikv_cpu_profile;`, i.dbName)
+	_, _, err := i.ctx.(sqlexec.RestrictedSQLExecutor).ExecRestrictedSQL(sql)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (i *InspectionHelper) GetSlowQueryLog(metricsStartTime types.Time, initId, txnTs int64) (int64, error) {
+	sql := fmt.Sprintf(`select ADDRESS, CONTENT from %s.CLUSTER_LOG where time > '%s' and content like '%%%d%%';`,
+		i.dbName, metricsStartTime, txnTs)
+	rows, _, err := i.ctx.(sqlexec.RestrictedSQLExecutor).ExecRestrictedSQL(sql)
+	if err != nil {
+		return 0, err
+	}
+	var rowCnt int64
+	for _, row := range rows {
+		address := row.GetString(0)
+		content := row.GetString(1)
+		sql := fmt.Sprintf(`insert into %s.SLOW_QUERY_DETAIL values (%d, 'log', '%s', '%s');`,
+			i.dbName, initId+rowCnt, address, content)
+		_, _, err = i.ctx.(sqlexec.RestrictedSQLExecutor).ExecRestrictedSQL(sql)
+		if err != nil {
+			return 0, err
+		}
+		rowCnt++
+	}
+
+	return rowCnt, err
 }
