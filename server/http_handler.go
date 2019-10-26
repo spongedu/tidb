@@ -1755,7 +1755,7 @@ func (r logReader) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 		if ok {
 			val := &log2.TiDBLogItem{
-				Address: fmt.Sprintf("%s:%s",config.GetGlobalConfig().Host, config.GetGlobalConfig().Port),
+				Address: fmt.Sprintf("%s:%d",config.GetGlobalConfig().Status.StatusHost, config.GetGlobalConfig().Status.StatusPort),
 				//Component: item.GetComponent(),
 				FileName: item.GetFileName(),
 				Time: item.GetTime(),

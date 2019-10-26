@@ -28,7 +28,7 @@ func (fw *FileWrapper) ParseFolderName() (string, string, error) {
 	//	return "", "", fmt.Errorf("unexpect folder name: %s", s)
 	//}
 	//return s[0], s[1], nil
-	return "", "", nil
+	return "tidb", "", nil
 }
 
 func NewFileWrapper(root, host, folder, filename string) *FileWrapper {
@@ -54,9 +54,9 @@ func ResolveDir(src string) ([]*FileWrapper, error) {
 		}
 		//host := config.GetGlobalConfig().Host
 		//port := config.GetGlobalConfig().Port
-		folder := src
+		//folder := src
 		filename := fi.Name()
-		fw := NewFileWrapper(src, "", folder, filename)
+		fw := NewFileWrapper(src, "", "", filename)
 		wrappers = append(wrappers, fw)
 		/*
 		host := fi.Name() // {host_ip}

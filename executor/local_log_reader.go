@@ -146,7 +146,7 @@ func (e *LocalLogReaderExecutor) parseData(data item.Item) ([]types.Datum, error
 	for _, col := range e.Columns {
 		switch col.Name.L {
 		case "address":
-			row = append(row, types.NewStringDatum(fmt.Sprintf("%s:%s", config.GetGlobalConfig().Host, config.GetGlobalConfig().Port)))
+			row = append(row, types.NewStringDatum(fmt.Sprintf("%s:%d", config.GetGlobalConfig().Status.StatusHost, config.GetGlobalConfig().Status.StatusPort)))
 		case "component":
 			row = append(row, types.NewStringDatum("tidb"))
 		case "filename":
