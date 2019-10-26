@@ -203,7 +203,27 @@ func (b *executorBuilder) build(p plannercore.Plan) Executor {
 	case *plannercore.PhysicalStreamReader:
 		return b.buildStreamReader(v)
 	case *plannercore.PhysicalInspectionReader:
-		return b.buildInspectionReader(v)
+		TimeStampLayout := "2006-01-02 15:04:05"
+		local, _ := time.LoadLocation("Asia/Chongqing")
+		// Transfer format
+		if s, ok := v.InspectionTableAttrs["q_starttime"]; ok {
+			t, _ := time.ParseInLocation(TimeStampLayout, strings.Split(s, ".")[0], local)
+			v.InspectionTableAttrs["startTime"] = t.Format("2006-01-02T15:04:05")
+		}
+		if s, ok := v.InspectionTableAttrs["q_endtime"]; ok {
+			t, _ := time.ParseInLocation(TimeStampLayout, strings.Split(s, ".")[0], local)
+			v.InspectionTableAttrs["endTime"] = t.Format("2006-01-02T15:04:05")
+		}
+		tp := v.InspectionTableAttrs["type"]
+		switch tp {
+		case "log_local":
+			return b.buildLocalLogReader(v)
+		case "log_remote":
+			return b.buildRemoteLogReader(v)
+		default:
+			b.err = ErrUnknownPlan.GenWithStack("Unknown Inspection reader type: %+s", tp)
+			return nil
+		}
 	case *plannercore.PhysicalIndexReader:
 		return b.buildIndexReader(v)
 	case *plannercore.PhysicalIndexLookUpReader:
@@ -240,6 +260,31 @@ func (b *executorBuilder) buildInspectionReader(v *plannercore.PhysicalInspectio
 	}
 }
 
+func (b *executorBuilder) buildLocalLogReader(v *plannercore.PhysicalInspectionReader) *LocalLogReaderExecutor {
+	return &LocalLogReaderExecutor{
+		baseExecutor: newBaseExecutor(b.ctx, v.Schema(), v.ExplainID()),
+		Table:        v.Table,
+		Columns:      v.Columns,
+		startTimeStr: v.InspectionTableAttrs["startTime"],
+		endTimeStr: v.InspectionTableAttrs["endTime"],
+		LimitStr: v.InspectionTableAttrs["limit"],
+	}
+}
+
+func (b *executorBuilder) buildRemoteLogReader(v *plannercore.PhysicalInspectionReader) *RemoteLogReaderExecutor {
+	return &RemoteLogReaderExecutor{
+		baseExecutor: newBaseExecutor(b.ctx, v.Schema(), v.ExplainID()),
+		Table:        v.Table,
+		Columns:      v.Columns,
+		startTimeStr: v.InspectionTableAttrs["startTime"],
+		endTimeStr: v.InspectionTableAttrs["endTime"],
+		LimitStr: v.InspectionTableAttrs["limit"],
+		pattern: v.InspectionTableAttrs["pattern"],
+		level: v.InspectionTableAttrs["level"],
+		nodes: v.InspectionTableAttrs["nodes"],
+		filename: v.InspectionTableAttrs["filename"],
+	}
+}
 
 func (b *executorBuilder) buildCancelDDLJobs(v *plannercore.CancelDDLJobs) Executor {
 	e := &CancelDDLJobsExec{
