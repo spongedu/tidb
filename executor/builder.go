@@ -203,18 +203,16 @@ func (b *executorBuilder) build(p plannercore.Plan) Executor {
 	case *plannercore.PhysicalStreamReader:
 		return b.buildStreamReader(v)
 	case *plannercore.PhysicalInspectionReader:
-		TimeStampLayout := "2006-01-02 15:04:05"
 		local, _ := time.LoadLocation("Asia/Chongqing")
-		// Transfer format
 		if s, ok := v.InspectionTableAttrs["q_starttime"]; ok {
-			t, _ := time.ParseInLocation(TimeStampLayout, strings.Split(s, ".")[0], local)
-			v.InspectionTableAttrs["startTime"] = t.Format("2006-01-02T15:04:05")
+			t, _ := time.ParseInLocation(types.TimeFormat, strings.Split(s, ".")[0], local)
+			v.InspectionTableAttrs["startTime"] = t.Format(types.TimeStampLayout)
 		} else {
 			v.InspectionTableAttrs["startTime"] = v.InspectionTableAttrs["default_startTime"]
 		}
 		if s, ok := v.InspectionTableAttrs["q_endtime"]; ok {
-			t, _ := time.ParseInLocation(TimeStampLayout, strings.Split(s, ".")[0], local)
-			v.InspectionTableAttrs["endTime"] = t.Format("2006-01-02T15:04:05")
+			t, _ := time.ParseInLocation(types.TimeFormat, strings.Split(s, ".")[0], local)
+			v.InspectionTableAttrs["endTime"] = t.Format(types.TimeStampLayout)
 		} else {
 			v.InspectionTableAttrs["endTime"] = v.InspectionTableAttrs["default_endTime"]
 		}

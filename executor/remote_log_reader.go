@@ -66,19 +66,16 @@ type resultBuffer struct {
 }
 
 func (e *RemoteLogReaderExecutor) Open(ctx context.Context) error {
-
-	TimeStampLayout := "2006-01-02T15:04:05"
 	local, err := time.LoadLocation("Asia/Chongqing")
 	if err != nil {
 		return err
 	}
-	// startTime, _ := time.ParseInLocation(TimeStampLayout ,"1970-01-01T00:00:00", local)
-	// endTime, _ := time.ParseInLocation(TimeStampLayout , "2030-01-01T00:00:00", local)
-	st, err := time.ParseInLocation(TimeStampLayout, e.startTimeStr, local)
+
+	st, err := time.ParseInLocation(types.TimeStampLayout, e.startTimeStr, local)
 	if err != nil {
 		return err
 	}
-	et, err := time.ParseInLocation(TimeStampLayout, e.endTimeStr, local)
+	et, err := time.ParseInLocation(types.TimeStampLayout, e.endTimeStr, local)
 	if err != nil {
 		return err
 	}

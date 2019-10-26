@@ -1663,6 +1663,16 @@ func (e *TiDBInspectionExec) Next(ctx context.Context, req *chunk.Chunk) error {
 		req.AppendString(2, "OK")
 	}
 
+	// generate CLUSTER_LOG table
+	idx++
+	req.AppendInt64(0, idx)
+	req.AppendString(1, "generate [CLUSTER_LOG] table")
+	if err := e.i.CreateClusterLogTable(); err != nil {
+		return errors.Trace(err)
+	} else {
+		req.AppendString(2, "OK")
+	}
+
 	// generate SYSTEM_INFO table
 	idx++
 	req.AppendInt64(0, idx)
@@ -1708,16 +1718,6 @@ func (e *TiDBInspectionExec) Next(ctx context.Context, req *chunk.Chunk) error {
 	req.AppendInt64(0, idx)
 	req.AppendString(1, "generate [TIKV_PERFORMANCE_INFO] table")
 	if err := e.i.GetTiKVPerfornamnceInfo(); err != nil {
-		return errors.Trace(err)
-	} else {
-		req.AppendString(2, "OK")
-	}
-
-	// generate TIDB_LOG table
-	idx++
-	req.AppendInt64(0, idx)
-	req.AppendString(1, "generate [TIDB_LOG] table")
-	if err := e.i.CreateLogTable(); err != nil {
 		return errors.Trace(err)
 	} else {
 		req.AppendString(2, "OK")
