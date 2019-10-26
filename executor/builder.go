@@ -279,7 +279,6 @@ func (b *executorBuilder) buildRemoteLogReader(v *plannercore.PhysicalInspection
 		startTimeStr: v.InspectionTableAttrs["startTime"],
 		endTimeStr: v.InspectionTableAttrs["endTime"],
 		LimitStr: v.InspectionTableAttrs["limit"],
-		url: v.InspectionTableAttrs["url"],
 		pattern: v.InspectionTableAttrs["pattern"],
 		level: v.InspectionTableAttrs["level"],
 		address: v.InspectionTableAttrs["address"],
