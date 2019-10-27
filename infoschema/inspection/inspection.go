@@ -33,10 +33,12 @@ import (
 	"github.com/pingcap/tidb/store/helper"
 	"github.com/pingcap/tidb/store/tikv"
 	"github.com/pingcap/tidb/util"
+	"github.com/pingcap/tidb/util/logutil"
 	"github.com/pingcap/tidb/util/sqlexec"
 	"github.com/prometheus/client_golang/api"
 	"github.com/prometheus/client_golang/api/prometheus/v1"
 	pmodel "github.com/prometheus/common/model"
+	"go.uber.org/zap"
 )
 
 const promReadTimeout = 10 * time.Second
@@ -1073,14 +1075,18 @@ func (i *InspectionHelper) StartDiagnoseSlowQueryJob() (id int64, err error) {
 			}
 		}()
 		for {
+			_, _, err := i.ctx.(sqlexec.RestrictedSQLExecutor).ExecRestrictedSQL("admin do inspection;")
+			if err != nil {
+				logutil.BgLogger().Error("run diagnose failed: %+v", zap.Error(err))
+			}
 			select {
 			case <- diagnoseJob.shouldStop:
-				break
+				diagnoseJob.wg.Done()
+				return
 			case <-time.After(1 * time.Minute):
 				continue
 			}
 		}
-		diagnoseJob.wg.Done()
 	}()
 	diagnoseJob.wg.Add(1)
 
@@ -1101,7 +1107,7 @@ func (i *InspectionHelper) StopDiagnoseSlowQueryJob() error {
 	mu.Lock()
 	defer mu.Unlock()
 
-	if diagnoseJob != nil {
+	if diagnoseJob == nil {
 		return nil
 	}
 	diagnoseJob.shouldStop<-nil
