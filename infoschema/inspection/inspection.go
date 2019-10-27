@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -39,6 +40,17 @@ import (
 )
 
 const promReadTimeout = 10 * time.Second
+
+type diagnoseWorker struct {
+	id int64
+	shouldStop chan interface{}
+	wg sync.WaitGroup
+}
+
+var (
+	diagnoseJob *diagnoseWorker
+	mu sync.Mutex
+)
 
 func NewInspectionHelper(ctx sessionctx.Context) *InspectionHelper {
 	return &InspectionHelper{
@@ -1040,4 +1052,59 @@ func (i *InspectionHelper) GetSlowQueryLog(metricsStartTime time.Time, initId, t
 	}
 
 	return rowCnt, err
+}
+
+func (i *InspectionHelper) StartDiagnoseSlowQueryJob() (id int64, err error) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	if diagnoseJob != nil {
+		return diagnoseJob.id, errors.New(fmt.Sprintf("diagnose job already exists: id=%d", diagnoseJob.id))
+	}
+	diagnoseJob = &diagnoseWorker{
+		id: time.Now().UnixNano(),
+		shouldStop: make(chan interface{}),
+	}
+
+	go func() {
+		defer func() {
+			if e := recover(); e != nil {
+				err = errors.New(fmt.Sprintf("diagnose job panic: %+v", err))
+			}
+		}()
+		for {
+			select {
+			case <- diagnoseJob.shouldStop:
+				break
+			case <-time.After(30 * time.Second):
+				continue
+			}
+		}
+		diagnoseJob.wg.Done()
+	}()
+	diagnoseJob.wg.Add(1)
+
+	return diagnoseJob.id, nil
+}
+
+func (i *InspectionHelper) QueryDiagnoseSlowQueryJob() (id int64, exists bool) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	if diagnoseJob == nil {
+		return 0, false
+	}
+	return diagnoseJob.id, true
+}
+
+func (i *InspectionHelper) StopDiagnoseSlowQueryJob() error {
+	mu.Lock()
+	defer mu.Unlock()
+
+	if diagnoseJob != nil {
+		return nil
+	}
+	diagnoseJob.shouldStop<-nil
+	diagnoseJob.wg.Wait()
+	return nil
 }

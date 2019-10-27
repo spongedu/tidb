@@ -1828,3 +1828,59 @@ func (e *TiDBInspectionExec) Next(ctx context.Context, req *chunk.Chunk) error {
 	e.done = true
 	return nil
 }
+
+type TiDBDiagnoseExec struct {
+	baseExecutor
+	done bool
+	action string
+	i    *inspection.InspectionHelper
+}
+
+// Open implements the Executor Open interface.
+func (e *TiDBDiagnoseExec) Open(ctx context.Context) error {
+	if err := e.baseExecutor.Open(ctx); err != nil {
+		return err
+	}
+
+	// dom := domain.GetDomain(e.ctx)
+	// e.result = dom.ShowSlowQuery(e.ShowSlow)
+	e.i = inspection.NewInspectionHelper(e.ctx)
+	return nil
+}
+
+// Next implements the Executor Next interface.
+func (e *TiDBDiagnoseExec) Next(ctx context.Context, req *chunk.Chunk) error {
+	req.Reset()
+	if e.done {
+		return nil
+	}
+	if e.action == ast.AdminDiagnoseSlowQueryStart {
+		id, err := e.i.StartDiagnoseSlowQueryJob()
+		if err != nil {
+			idx := int64(0)
+			req.AppendInt64(0, idx)
+			req.AppendString(1, fmt.Sprintf("start diagnose slow query every 30 seconds"))
+			req.AppendString(2, err.Error())
+		} else {
+			req.AppendInt64(0, id)
+			req.AppendString(1, fmt.Sprintf("start diagnose slow query every 30 seconds"))
+			req.AppendString(2, "ok")
+		}
+	} else if e.action == ast.AdminDiagnoseSlowQueryStop {
+		idx := int64(0)
+		req.AppendInt64(0, idx)
+		if err := e.i.StopDiagnoseSlowQueryJob(); err != nil {
+			req.AppendString(1, fmt.Sprintf("stop diagnose slow query"))
+			req.AppendString(2, err.Error())
+		} else {
+			req.AppendString(1, fmt.Sprintf("stop diagnose slow query"))
+			req.AppendString(2, "ok")
+		}
+	} else if e.action == ast.AdminDiagnoseSlowQueryShow {
+		if id, exists := e.i.QueryDiagnoseSlowQueryJob(); exists {
+			req.AppendInt64(0, id)
+		}
+	}
+	e.done = true
+	return nil
+}
