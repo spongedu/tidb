@@ -1075,6 +1075,8 @@ func (i *InspectionHelper) StartDiagnoseSlowQueryJob() (id int64, err error) {
 			}
 		}()
 		for {
+			//FIXME: We should create a new ctx to avoid concurrency
+			i.ctx.GetSessionVars().StmtCtx.InAdminDiagnose = true
 			_, _, err := i.ctx.(sqlexec.RestrictedSQLExecutor).ExecRestrictedSQL("admin do inspection;")
 			if err != nil {
 				logutil.BgLogger().Error("run diagnose failed: %+v", zap.Error(err))
@@ -1082,6 +1084,7 @@ func (i *InspectionHelper) StartDiagnoseSlowQueryJob() (id int64, err error) {
 			select {
 			case <- diagnoseJob.shouldStop:
 				diagnoseJob.wg.Done()
+				i.ctx.GetSessionVars().StmtCtx.InAdminDiagnose = false
 				return
 			case <-time.After(1 * time.Minute):
 				continue

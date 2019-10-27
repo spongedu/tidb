@@ -1864,11 +1864,11 @@ func (e *TiDBDiagnoseExec) Next(ctx context.Context, req *chunk.Chunk) error {
 		if err != nil {
 			idx := int64(0)
 			req.AppendInt64(0, idx)
-			req.AppendString(1, fmt.Sprintf("start diagnose slow query every 30 seconds"))
+			req.AppendString(1, fmt.Sprintf("start diagnose slow query every 60 seconds"))
 			req.AppendString(2, err.Error())
 		} else {
 			req.AppendInt64(0, id)
-			req.AppendString(1, fmt.Sprintf("start diagnose slow query every 30 seconds"))
+			req.AppendString(1, fmt.Sprintf("start diagnose slow query every 60 seconds"))
 			req.AppendString(2, "ok")
 		}
 	} else if e.action == ast.AdminDiagnoseSlowQueryStop {
