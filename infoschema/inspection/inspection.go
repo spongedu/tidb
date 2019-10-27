@@ -1106,5 +1106,6 @@ func (i *InspectionHelper) StopDiagnoseSlowQueryJob() error {
 	}
 	diagnoseJob.shouldStop<-nil
 	diagnoseJob.wg.Wait()
+	diagnoseJob = nil
 	return nil
 }
