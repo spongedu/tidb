@@ -1076,7 +1076,7 @@ func (i *InspectionHelper) StartDiagnoseSlowQueryJob() (id int64, err error) {
 			select {
 			case <- diagnoseJob.shouldStop:
 				break
-			case <-time.After(30 * time.Second):
+			case <-time.After(1 * time.Minute):
 				continue
 			}
 		}
