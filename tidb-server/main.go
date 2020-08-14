@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package tidbserver
 
 import (
 	"context"
@@ -20,6 +20,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -136,18 +137,31 @@ var (
 	dom      *domain.Domain
 	svr      *server.Server
 	graceful bool
+
+	tikvRegOnce sync.Once
 )
 
-func main() {
+func StartTiDBServer(port uint) {
 	flag.Parse()
 	if *version {
 		fmt.Println(printer.GetTiDBInfo())
 		os.Exit(0)
 	}
 	registerStores()
-	registerMetrics()
+	//registerMetrics()
 	configWarning := loadConfig()
 	overrideConfig()
+	config.GetGlobalConfig().Port = port
+
+	// make mocktikv works in memory mode
+	config.GetGlobalConfig().Path = ""
+
+	// use pessimistic lock mode
+	config.GetGlobalConfig().PessimisticTxn.Enable = true
+	config.GetGlobalConfig().PessimisticTxn.Default = true
+
+	config.GetGlobalConfig().Log.Level = "warn"
+
 	if err := cfg.Valid(); err != nil {
 		fmt.Fprintln(os.Stderr, "invalid config", err)
 		os.Exit(1)
@@ -185,11 +199,13 @@ func exit() {
 }
 
 func registerStores() {
-	err := kvstore.Register("tikv", tikv.Driver{})
-	terror.MustNil(err)
-	tikv.NewGCHandlerFunc = gcworker.NewGCWorker
-	err = kvstore.Register("mocktikv", mockstore.MockDriver{})
-	terror.MustNil(err)
+	tikvRegOnce.Do(func() {
+		err := kvstore.Register("tikv", tikv.Driver{})
+		terror.MustNil(err)
+		tikv.NewGCHandlerFunc = gcworker.NewGCWorker
+		err = kvstore.Register("mocktikv", mockstore.MockDriver{})
+		terror.MustNil(err)
+	})
 }
 
 func registerMetrics() {
